@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "356416555127",
+    "firebase_url": "https://musaffa-fa520-default-rtdb.firebaseio.com",
+    "project_id": "musaffa-fa520",
+    "storage_bucket": "musaffa-fa520.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:356416555127:android:ad26d14eb190a2ca24de72",
+        "android_client_info": {
+          "package_name": "com.example.nocram"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBr9_DfWFCIFvIuuT6HkJ5T7MHgNb-aSJ8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:356416555127:android:2096663b4a47e5e424de72",
+        "android_client_info": {
+          "package_name": "in.solutionwise.nocram"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBr9_DfWFCIFvIuuT6HkJ5T7MHgNb-aSJ8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
