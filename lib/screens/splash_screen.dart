@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../controllers/subscription_controller.dart';
 import 'main_screen.dart';
 import 'signup_screen.dart';
 
@@ -13,6 +14,9 @@ class Splashscreen extends StatefulWidget {
 }
 
 class _SplashscreenState extends State<Splashscreen> {
+
+  var controller = Get.put(SubscriptionController());
+
   @override
   void initState() {
     super.initState();

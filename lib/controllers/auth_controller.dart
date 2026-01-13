@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:nocram/controllers/subscription_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../screens/main_screen.dart';
 import '../services/firebase/firestore_service.dart';
@@ -23,6 +25,7 @@ class AuthController extends GetxController{
   final loginEmailFocus = FocusNode();
   final loginPasswordFocus = FocusNode();
 
+  var subscriptionController = Get.find<SubscriptionController>();
 
   Future<void> registerUser() async {
     isLoading(true);
@@ -147,7 +150,9 @@ class AuthController extends GetxController{
     try {
       // 🔐 LOGIN USER
       await FirestoreService().loginUser(email, password);
-
+      var pref = await SharedPreferences.getInstance();
+      var userId = pref.getString('userId');
+      subscriptionController.init(userId??'');
 
       // ✅ SUCCESS → clear back stack
       Get.offAll(() => MainScreen());

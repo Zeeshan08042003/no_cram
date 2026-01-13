@@ -3,17 +3,17 @@ import 'dart:convert';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/foundation.dart';
 
-
 final remoteConfig = FirebaseRemoteConfig.instance;
 
 var defaultConfigs = {
   "default_config": jsonEncode({
-      "defaultValue": {
-        "value": {
-          "text_prompt": "You are a helpful study assistant for college students. Explain concepts clearly, simply, and stay focused on the question.",
-          "model": "gemini-1.5-flash"
-        }
+    "defaultValue": {
+      "value": {
+        "text_prompt":
+            "You are a helpful study assistant for college students. Explain concepts clearly, simply, and stay focused on the question.",
+        "model": "gemini-1.5-flash"
       }
+    }
   })
 };
 
@@ -42,23 +42,13 @@ setupFirebaseRemoteConfig() async {
   try {
     var datae = await remoteConfig.fetchAndActivate();
     print("data 3 is here $datae");
-
   } catch (e) {}
 }
 
 ConfigDefaultValue getConfigDefaults() {
   var collection = jsonDecode(remoteConfig.getString("default_config"));
   return ConfigDefaultValue.fromJson(collection);
-  }
-
-
-
-
-
-
-
-
-
+}
 
 class ConfigDefaultValue {
   TextConfig? textValue;
@@ -66,11 +56,7 @@ class ConfigDefaultValue {
   StoryConfig? storyValue;
   ExplainImageConfig? explainImageValue;
 
-  ConfigDefaultValue({
-    this.textValue,
-    this.imageValue,
-    this.storyValue
-  });
+  ConfigDefaultValue({this.textValue, this.imageValue, this.storyValue});
 
   /// Expects the top-level JSON, e.g. the whole object shown above.
   ConfigDefaultValue.fromJson(Map<String, dynamic> json) {
@@ -155,7 +141,6 @@ class ImageConfig {
   }
 }
 
-
 class StoryConfig {
   String? storyPrompt; // your "image_value" prompt
   String? model;
@@ -193,5 +178,3 @@ class ExplainImageConfig {
     return data;
   }
 }
-
-

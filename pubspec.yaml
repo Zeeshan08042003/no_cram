@@ -50,6 +50,7 @@ dependencies:
   shimmer: ^3.0.0
   uid: ^0.0.2
   shared_preferences: ^2.5.3
+  purchases_flutter: ^9.10.2
 
 dev_dependencies:
   flutter_test:
