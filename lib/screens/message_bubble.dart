@@ -143,7 +143,7 @@ class _MessageBubbleState extends State<MessageBubble>
   Widget build(BuildContext context) {
     super.build(context);
 
-    if (widget.isUser && widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
+    if (widget.isUser && _hasUserImages) {
       return _buildUserImageBubble(context);
     }
 
@@ -171,6 +171,14 @@ class _MessageBubbleState extends State<MessageBubble>
 
   // ───────────────── USER BUBBLES ─────────────────
 
+  /// Check if user message has any images (single or multiple)
+  bool get _hasUserImages {
+    if (widget.imageUrl != null && widget.imageUrl!.isNotEmpty) return true;
+    if (widget.imageUrlList != null && widget.imageUrlList!.isNotEmpty) return true;
+    if (widget.imageBytesList != null && widget.imageBytesList!.isNotEmpty) return true;
+    return false;
+  }
+
   Widget _buildUserBubble(BuildContext context) {
     return UserMessageCard(
       content: SelectableText(widget.text,
@@ -181,23 +189,60 @@ class _MessageBubbleState extends State<MessageBubble>
   }
 
   Widget _buildUserImageBubble(BuildContext context) {
-    final image = widget.imageUrl!.startsWith('data:image')
-        ? Image.memory(
-      base64Decode(widget.imageUrl!.split(',').last),
-      fit: BoxFit.cover,
-    )
-        : Image.network(widget.imageUrl!, fit: BoxFit.cover);
+    // Collect all image widgets (from bytes or URLs)
+    final images = <Widget>[];
+    
+    // 1️⃣ Images from bytes (live chat)
+    if (widget.imageBytesList != null && widget.imageBytesList!.isNotEmpty) {
+      for (final bytes in widget.imageBytesList!) {
+        final img = Image.memory(bytes, fit: BoxFit.cover);
+        images.add(_buildUserTapImage(img));
+      }
+    }
+    
+    // 2️⃣ Images from URL list (history)
+    if (widget.imageUrlList != null && widget.imageUrlList!.isNotEmpty) {
+      for (final url in widget.imageUrlList!) {
+        final img = url.startsWith('data:image')
+            ? Image.memory(base64Decode(url.split(',').last), fit: BoxFit.cover)
+            : Image.network(url, fit: BoxFit.cover);
+        images.add(_buildUserTapImage(img));
+      }
+    }
+    
+    // 3️⃣ Single image URL (legacy)
+    if (images.isEmpty && widget.imageUrl != null && widget.imageUrl!.isNotEmpty) {
+      final img = widget.imageUrl!.startsWith('data:image')
+          ? Image.memory(base64Decode(widget.imageUrl!.split(',').last), fit: BoxFit.cover)
+          : Image.network(widget.imageUrl!, fit: BoxFit.cover);
+      images.add(_buildUserTapImage(img));
+    }
+
+    // Single image vs multiple images view
+    final imageView = images.length == 1
+        ? images.first
+        : SizedBox(
+            height: 100,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: images.length,
+              itemBuilder: (context, index) => Padding(
+                padding: EdgeInsets.only(right: index < images.length - 1 ? 8 : 0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(width: 100, height: 100, child: images[index]),
+                ),
+              ),
+            ),
+          );
 
     return UserMessageCard(
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: () => showImageInDialog(image),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: image,
-            ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: imageView,
           ),
           if (widget.text.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -206,6 +251,13 @@ class _MessageBubbleState extends State<MessageBubble>
           ]
         ],
       ),
+    );
+  }
+
+  Widget _buildUserTapImage(Widget image) {
+    return GestureDetector(
+      onTap: () => showImageInDialog(image),
+      child: image,
     );
   }
 

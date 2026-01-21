@@ -284,4 +284,34 @@ class StorageService {
     return await task.ref.getDownloadURL();
   }
 
+  /// Upload multiple images and return list of download URLs
+  Future<List<String>> uploadMultipleImages({
+    required List<Uint8List> bytesList,
+    required String userId,
+    String folder = 'image_explanation',
+    String ext = 'jpg',
+  }) async {
+    final List<String> downloadUrls = [];
+    
+    for (int i = 0; i < bytesList.length; i++) {
+      try {
+        final ref = _storage
+            .ref()
+            .child(folder)
+            .child(userId)
+            .child('${DateTime.now().millisecondsSinceEpoch}_$i.$ext');
+
+        final metadata = SettableMetadata(contentType: 'image/$ext');
+        final task = await ref.putData(bytesList[i], metadata);
+        final url = await task.ref.getDownloadURL();
+        downloadUrls.add(url);
+        print('[STORAGE] Uploaded image ${i + 1}/${bytesList.length}');
+      } catch (e) {
+        print('❌ Error uploading image $i: $e');
+      }
+    }
+    
+    return downloadUrls;
+  }
+
 }

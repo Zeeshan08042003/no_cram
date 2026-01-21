@@ -224,24 +224,24 @@ class HistoryScreen extends StatelessWidget {
 
           // ---------- LEADING ----------
           leading: Container(
-            padding: chat.userInput.imageUrl != null
+            padding: chat.userInput.hasImages
                 ? EdgeInsets.zero
                 : const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: iconColor.withOpacity(0.12),
               borderRadius: BorderRadius.circular(8),
-              border: chat.userInput.imageUrl != null
+              border: chat.userInput.hasImages
                   ? Border.all(color: Colors.black12)
                   : null,
             ),
-            child: chat.userInput.imageUrl != null
+            child: chat.userInput.hasImages
                 ? ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
                 height: 40,
                 width: 40,
                 child: Image.network(
-                  chat.userInput.imageUrl!,
+                  chat.userInput.firstImageUrl!,
                   fit: BoxFit.cover,
                 ),
               ),
@@ -310,7 +310,7 @@ class HistoryScreen extends StatelessWidget {
           onTap: isDeleteMode
               ? null // 🚫 disable navigation in delete mode
               : () {
-            Get.to(() => ResultScreen(chatModel: chat));
+            Get.to(() => ResultScreen.history(chat));
           },
         ),
       );

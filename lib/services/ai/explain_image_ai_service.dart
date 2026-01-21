@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/material.dart';
@@ -32,109 +33,117 @@ class ExplainImageAiService {
     var controller = Get.find<ChatController>();
     var pref = await SharedPreferences.getInstance();
     var userId = pref.getString('userId');
-    if (controller.selectedImageBytes.value == null) {
+    
+    // Check if images are selected (using list instead of single value)
+    if (controller.selectedImageBytesList.isEmpty) {
       final picked = await chooseImageSourceForExplain();
-      if (!picked || controller.selectedImageBytes.value == null) return;
+      if (!picked || controller.selectedImageBytesList.isEmpty) return;
     }
 
     if (text.isEmpty) {
       Get.snackbar(
         'Add a question',
-        'Please write what you want to know about the image, then send.',
+        'Please write what you want to know about the images, then send.',
         snackPosition: SnackPosition.BOTTOM,
       );
       return;
     }
 
+    // Get all selected images
+    final imageBytesList = List<Uint8List>.from(controller.selectedImageBytesList);
 
-    final bytes = controller.selectedImageBytes.value!;
-    final base64Image = base64Encode(bytes);
-    final dataUri = 'data:image/jpeg;base64,$base64Image';
-
-    /// 1️⃣ USER MESSAGE
+    /// 1️⃣ USER MESSAGE (with multiple images)
+    /// Note: Only pass imageBytesList for live chat. imageUrlList is for history loading.
     controller.messages.add(
-      ChatMessage(
-        text: text,
-        isUser: true,
-        mode: ChatMode.explainImage,
-        imageUrl: dataUri,
+      FBChatItem.user(
+        prompt: text,
+        mode: ChatMode.explainImage.key,
+        imageBytesList: imageBytesList,
       ),
     );
     controller.textController.clear();
-    controller.selectedImageBytes.value = null;
+    controller.clearImages(); // Clear all selected images
     controller.scrollToBottom();
 
     /// 2️⃣ LOADING MESSAGE
     final loadingIndex = controller.messages.length;
+    final imageCount = imageBytesList.length;
     controller.messages.add(
-      ChatMessage(
-        text: 'Analyzing the image and explaining it...',
-        imageText: 'Analyzing the image and explaining it...',
-        isUser: false,
-        mode: ChatMode.explainImage,
+      FBChatItem.ai(
+        mode: ChatMode.explainImage.key,
+        text: 'Analyzing ${imageCount > 1 ? "$imageCount images" : "the image"} and explaining...',
       ),
     );
     controller.scrollToBottom();
 
     final cfg = getConfigDefaults();
-    final basePrompt = cfg.explainImageValue?.explainImagePrompt ??
-        '''
-You are a kind, clear college teacher helping a student understand an image.
-Explain clearly and step-by-step.
-''';
+    
+    // Use multi_image_prompt when multiple images are selected
+    final isMultiImage = imageBytesList.length > 1;
+    final basePrompt = isMultiImage
+        ? (cfg.explainImageValue?.multiImagePrompt ??
+            '''
+You are a kind, clear college teacher helping a student understand something from multiple images of notes, diagrams, or handwritten work.
+Carefully review all provided images together before answering. Treat them as parts of a single explanation unless they clearly show different topics.
+User question: $text
+''')
+        : (cfg.explainImageValue?.explainImagePrompt ??
+            '''
+You are a kind, clear college teacher helping a student understand something from an image of notes or a diagram.
+Use only the content visible in the image to answer.
+User question: $text
+''');
 
     try {
-      /// 3️⃣ GEMINI IMAGE EXPLANATION
+      /// 3️⃣ GEMINI IMAGE EXPLANATION (with all images)
       final explainModel = FirebaseAI.googleAI().generativeModel(
         model: cfg.explainImageValue?.model ?? 'gemini-2.5-flash',
       );
 
+      // Build content parts with all images
+      final contentParts = <Part>[TextPart(basePrompt)];
+      for (final bytes in imageBytesList) {
+        contentParts.add(InlineDataPart('image/jpeg', bytes));
+      }
+
       final response = await explainModel.generateContent([
-        Content.multi([
-          TextPart(basePrompt),
-          InlineDataPart('image/jpeg', bytes),
-        ])
+        Content.multi(contentParts)
       ]);
 
-      print("Object 2");
+      print("Object 2 - Multi-image explanation complete");
 
       final output = response.text ??
-          "Sorry, I couldn't explain this image. Please try another one.";
+          "Sorry, I couldn't explain the images. Please try again.";
 
-      var file = await Constants().bytesToFile(bytes);
-      /// 4️⃣ UPLOAD IMAGE TO FIREBASE STORAGE
-      ///
-      print("print the data : ${file.absolute}");
-      var imageUrl = await StorageService().uploadImage(
-        file, userId??'',
+      /// 4️⃣ UPLOAD ALL IMAGES TO FIREBASE STORAGE
+      print("Uploading ${imageBytesList.length} images to storage...");
+      final imageUrls = await StorageService().uploadMultipleImages(
+        bytesList: imageBytesList,
+        userId: userId ?? '',
+        folder: 'image_explanation',
       );
 
-      print("print the data 2 : ${imageUrl}");
+      print("Uploaded ${imageUrls.length} images successfully");
 
-      print("Object 3");
-
-      /// 5️⃣ SAVE CHAT TO FIRESTORE
-
-      /// 6️⃣ UPDATE UI MESSAGE
+      /// 5️⃣ UPDATE UI MESSAGE
       if (loadingIndex < controller.messages.length) {
-        print("Object 4");
+        print("Object 4 - Updating UI");
 
-        controller.messages[loadingIndex] = ChatMessage(
+        controller.messages[loadingIndex] = FBChatItem.ai(
+          mode: ChatMode.explainImage.key,
           text: output,
-          isUser: false,
-          mode: ChatMode.explainImage,
         );
 
+        /// 6️⃣ SAVE CHAT TO FIRESTORE (with multiple image URLs)
         var chat = FBChatModel(
           id: '',
-          userId: userId??'',
-          mode: ChatMode.explainImage.name,
+          userId: userId ?? '',
+          mode: ChatMode.explainImage.key,
           createdAt: DateTime.now(),
           userInput: UserInput(
             prompt: text,
-            imageUrl: imageUrl,
+            imageUrl: imageUrls, // Save all image URLs
           ),
-
           aiOutput: AIResponse(
             text: output,
           ),
@@ -142,18 +151,16 @@ Explain clearly and step-by-step.
 
         await FirestoreService().createChat(chat);
 
-
-        print("Object 5");
+        print("Object 5 - Chat saved to Firestore");
       }
     } catch (e, st) {
       print('Gemini error in Explain Image: $e');
       print(st);
 
       if (loadingIndex < controller.messages.length) {
-        controller.messages[loadingIndex] = ChatMessage(
-          text: "Error while explaining the image.",
-          isUser: false,
-          mode: ChatMode.explainImage,
+        controller.messages[loadingIndex] = FBChatItem.ai(
+          mode: ChatMode.explainImage.key,
+          text: "Error while explaining the images.",
         );
       }
     }
@@ -198,10 +205,14 @@ Explain clearly and step-by-step.
                   'Use Camera',
                   style: TextStyle(color: Colors.white),
                 ),
+                subtitle: const Text(
+                  'Capture one image',
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
                 onTap: () async {
                   Get.back();
                   await _captureImageFromCamera();
-                  pickedAny = controller.selectedImageBytes.value != null;
+                  pickedAny = controller.selectedImageBytesList.isNotEmpty;
                 },
               ),
               ListTile(
@@ -211,10 +222,14 @@ Explain clearly and step-by-step.
                   'Choose from Gallery',
                   style: TextStyle(color: Colors.white),
                 ),
+                subtitle: Text(
+                  'Select up to ${ChatController.maxImageCount} images',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
                 onTap: () async {
                   Get.back();
-                  await _pickImageFromGallery();
-                  pickedAny = controller.selectedImageBytes.value != null;
+                  await _pickMultipleImagesFromGallery();
+                  pickedAny = controller.selectedImageBytesList.isNotEmpty;
                 },
               ),
             ],
@@ -226,19 +241,31 @@ Explain clearly and step-by-step.
     return pickedAny;
   }
 
-  Future<void> _pickImageFromGallery() async {
+  /// Pick multiple images from gallery
+  Future<void> _pickMultipleImagesFromGallery() async {
     var controller = Get.find<ChatController>();
     try {
-      final picked = await _imagePicker.pickImage(source: ImageSource.gallery);
-      if (picked == null) return;
+      final pickedFiles = await _imagePicker.pickMultiImage(
+        limit: ChatController.maxImageCount,
+      );
+      
+      if (pickedFiles.isEmpty) return;
 
-      final bytes = await picked.readAsBytes();
-      controller.selectedImageBytes.value = bytes;
-      print('[IMAGE] Picked from gallery bytes length=${bytes.length}');
+      // Clear existing images before adding new ones to avoid duplicates
+      controller.clearImages();
+
+      final bytesList = <Uint8List>[];
+      for (final file in pickedFiles) {
+        final bytes = await file.readAsBytes();
+        bytesList.add(bytes);
+      }
+      
+      controller.addMultipleImageBytes(bytesList);
+      print('[IMAGE] Picked ${pickedFiles.length} images from gallery');
     } catch (e) {
       Get.snackbar(
         'Gallery error',
-        'Could not pick image from gallery: $e',
+        'Could not pick images from gallery: $e',
         snackPosition: SnackPosition.BOTTOM,
       );
     }
@@ -250,8 +277,11 @@ Explain clearly and step-by-step.
       final picked = await _imagePicker.pickImage(source: ImageSource.camera);
       if (picked == null) return;
 
+      // Clear existing images before adding new one to avoid duplicates
+      controller.clearImages();
+
       final bytes = await picked.readAsBytes();
-      controller.selectedImageBytes.value = bytes;
+      controller.addImageBytes(bytes);
       print('[IMAGE] Captured from camera bytes length=${bytes.length}');
     } catch (e) {
       Get.snackbar(

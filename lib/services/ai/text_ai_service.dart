@@ -28,10 +28,9 @@ class TextAIService {
     final loadingIndex = controller.messages.length;
 
     controller.messages.add(
-      ChatMessage(
+      FBChatItem.ai(
+        mode: mode.key,
         text: 'Thinking about your question...',
-        isUser: false,
-        mode: mode,
       ),
     );
     controller.scrollToBottom();
@@ -58,10 +57,9 @@ $text
 
       /// ✅ UPDATE UI
       if (loadingIndex < controller.messages.length) {
-        controller.messages[loadingIndex] = ChatMessage(
+        controller.messages[loadingIndex] = FBChatItem.ai(
+          mode: mode.key,
           text: output,
-          isUser: false,
-          mode: mode,
         );
 
 
@@ -70,7 +68,7 @@ $text
         final chat = FBChatModel(
           id: '',
           userId: userId??'',
-          mode: ChatMode.explainImage.name,
+          mode: mode.key,
           createdAt: DateTime.now(),
           userInput: UserInput(
             prompt: text,
@@ -90,10 +88,9 @@ $text
       print('[STACKTRACE] $st');
 
       if (loadingIndex < controller.messages.length) {
-        controller.messages[loadingIndex] = ChatMessage(
+        controller.messages[loadingIndex] = FBChatItem.ai(
+          mode: mode.key,
           text: "Something went wrong. Please try again.",
-          isUser: false,
-          mode: mode,
         );
       }
     }

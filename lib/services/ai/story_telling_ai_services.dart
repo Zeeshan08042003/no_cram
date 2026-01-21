@@ -33,10 +33,9 @@ class StoryTellingServices{
 
     final loadingIndex = controller.messages.length;
     controller.messages.add(
-      ChatMessage(
+      FBChatItem.ai(
+        mode: ChatMode.storyTelling.key,
         text: 'Crafting your story...',
-        isUser: false,
-        mode: ChatMode.storyTelling,
       ),
     );
     controller.scrollToBottom();
@@ -59,10 +58,9 @@ $userInput
       if (output == null || output.trim().isEmpty) {
         print("🟡 Story: empty output from model");
         if (loadingIndex < controller.messages.length) {
-          controller.messages[loadingIndex] = ChatMessage(
+          controller.messages[loadingIndex] = FBChatItem.ai(
+            mode: ChatMode.storyTelling.key,
             text: "Sorry, I couldn't create a story. Please try again.",
-            isUser: false,
-            mode: ChatMode.storyTelling,
           );
         }
         return;
@@ -73,7 +71,7 @@ $userInput
         final chat = FBChatModel(
           id: '',
           userId: userId??'',
-          mode: ChatMode.storyTelling.name,
+          mode: ChatMode.storyTelling.key,
           createdAt: DateTime.now(),
           userInput: UserInput(
             prompt: userInput,
@@ -86,10 +84,9 @@ $userInput
         await FirestoreService().createChat(chat);
 
 
-        controller.messages[loadingIndex] = ChatMessage(
+        controller.messages[loadingIndex] = FBChatItem.ai(
+          mode: ChatMode.storyTelling.key,
           text: output,
-          isUser: false,
-          mode: ChatMode.storyTelling,
         );
       }
     } catch (e, st) {
@@ -97,11 +94,9 @@ $userInput
       print("$st");
       if (loadingIndex < controller.messages.length) {
 
-        controller.messages[loadingIndex] = ChatMessage(
-          text:
-          "Something went wrong while creating the story. Please try again.",
-          isUser: false,
-          mode: ChatMode.storyTelling,
+        controller.messages[loadingIndex] = FBChatItem.ai(
+          mode: ChatMode.storyTelling.key,
+          text: "Something went wrong while creating the story. Please try again.",
         );
       }
     }

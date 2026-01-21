@@ -28,10 +28,9 @@ class ImageAIService {
     /// 1️⃣ Loading UI
     final loadingIndex = controller.messages.length;
     controller.messages.add(
-      ChatMessage(
+      FBChatItem.ai(
+        mode: ChatMode.illustration.key,
         text: 'Thinking about your illustration idea...',
-        isUser: false,
-        mode: ChatMode.illustration,
       ),
     );
     controller.scrollToBottom();
@@ -98,10 +97,10 @@ $userInput
       final chat = FBChatModel(
         id: '',
         userId: userId??'',
-        mode: ChatMode.illustration.label,
+        mode: ChatMode.illustration.key,
         createdAt: DateTime.now(),
         userInput: UserInput(prompt: userInput),
-        aiOutput: AIResponse(text: explainResponse.text,imageUrls: uploadedUrls)
+        aiOutput: AIResponse(text: explainResponse.text, imageUrls: uploadedUrls)
       );
 
       final docRef = FirebaseFirestore.instance
@@ -113,22 +112,19 @@ $userInput
       );
 
       /// 7️⃣ Update UI
-      controller.messages[loadingIndex] = ChatMessage(
-        text: '',
-        isUser: false,
-        mode: ChatMode.illustration,
-        imageText: explainResponse.text,
+      controller.messages[loadingIndex] = FBChatItem.ai(
+        mode: ChatMode.illustration.key,
+        text: explainResponse.text ?? '',
+        imageUrls: previewUris,
         imageBytesList: imageBytesList,
-        imageUrlList: previewUris,
       );
     } catch (e, st) {
       print('🔴 Illustration error: $e');
       print(st);
 
-      controller.messages[loadingIndex] = ChatMessage(
+      controller.messages[loadingIndex] = FBChatItem.ai(
+        mode: ChatMode.illustration.key,
         text: 'Something went wrong while creating the illustration.',
-        isUser: false,
-        mode: ChatMode.illustration,
       );
     }
 

@@ -161,19 +161,22 @@ class StoryConfig {
 }
 
 class ExplainImageConfig {
-  String? explainImagePrompt; // your "image_value" prompt
+  String? explainImagePrompt; // prompt for single image
+  String? multiImagePrompt; // prompt for multiple images
   String? model;
 
-  ExplainImageConfig({this.explainImagePrompt, this.model});
+  ExplainImageConfig({this.explainImagePrompt, this.multiImagePrompt, this.model});
 
   ExplainImageConfig.fromJson(Map<String, dynamic> json) {
-    explainImagePrompt = json['image_explanation_value'] as String?;
+    explainImagePrompt = json['image_explanation_prompt'] as String?;
+    multiImagePrompt = json['multi_image_prompt'] as String?;
     model = json['model'] as String?;
   }
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = {};
-    data['image_explanation_value'] = explainImagePrompt;
+    data['image_explanation_prompt'] = explainImagePrompt;
+    data['multi_image_prompt'] = multiImagePrompt;
     data['model'] = model;
     return data;
   }

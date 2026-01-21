@@ -263,45 +263,94 @@ class HomeScreen extends StatelessWidget {
         children: [
           // Expanded multi-line TextField (min 4 lines, grows as needed)
           Obx(() {
-            final bytes = controller.selectedImageBytes.value;
+            final imageList = controller.selectedImageBytesList;
 
-            if (bytes == null) return const SizedBox.shrink();
+            if (imageList.isEmpty) return const SizedBox.shrink();
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  GestureDetector(
-                    onTap: () {
-                      var imageWidget = Image.memory(bytes, fit: BoxFit.cover);
-                      controller.showImageInDialog(imageWidget);
-                    },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(
-                        bytes,
-                        height: 50,
-                        width: 100,
-                        fit: BoxFit.cover,
-                      ),
+                  // Image count indicator
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Text(
+                          '${imageList.length} image${imageList.length > 1 ? 's' : ''} selected',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (imageList.length > 1)
+                          GestureDetector(
+                            onTap: () => controller.clearImages(),
+                            child: Text(
+                              'Clear all',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.red[400],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  InkWell(
-                    onTap: () {
-                      controller.selectedImageBytes.value = null;
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        shape: BoxShape.circle,
-                      ),
-                      padding: const EdgeInsets.all(6),
-                      child: const Icon(
-                        Icons.close,
-                        size: 16,
-                        color: Colors.white,
-                      ),
+                  // Horizontal scrollable image thumbnails
+                  SizedBox(
+                    height: 80,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: imageList.length,
+                      itemBuilder: (context, index) {
+                        final bytes = imageList[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: Stack(
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  var imageWidget = Image.memory(bytes, fit: BoxFit.cover);
+                                  controller.showImageInDialog(imageWidget);
+                                },
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.memory(
+                                    bytes,
+                                    height: 80,
+                                    width: 80,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                top: 4,
+                                right: 4,
+                                child: GestureDetector(
+                                  onTap: () => controller.removeImageAt(index),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.6),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    padding: const EdgeInsets.all(4),
+                                    child: const Icon(
+                                      Icons.close,
+                                      size: 14,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -339,7 +388,7 @@ class HomeScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 child: InkWell(
                   onTap: () {
-                    // your mic handler
+
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: const Icon(Icons.mic, color: Colors.blue),
