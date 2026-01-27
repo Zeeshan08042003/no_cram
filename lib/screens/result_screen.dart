@@ -7,29 +7,41 @@ import 'message_bubble.dart';
 
 /// Enum to distinguish between new generation and viewing history
 enum ResultViewMode {
-  generation,  // New AI generation in progress
-  history,     // Viewing past chat from history
+  generation,    // New AI generation in progress
+  history,       // Viewing past chat from history (legacy FBChatModel)
+  conversation,  // Viewing a conversation with all its chats
 }
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({
     super.key,
     this.chatModel,
+    this.conversationModel,
     this.viewMode = ResultViewMode.generation,
+    this.isLegacy = false,
   });
   
   final FBChatModel? chatModel;
+  final FBConversationModel? conversationModel;
   final ResultViewMode viewMode;
+  final bool isLegacy; // Whether this is a legacy chat from old 'chats' collection
   
   /// Factory constructor for generation mode
   factory ResultScreen.generation() => const ResultScreen(
     viewMode: ResultViewMode.generation,
   );
   
-  /// Factory constructor for history mode
+  /// Factory constructor for history mode (legacy - single chat)
   factory ResultScreen.history(FBChatModel chatModel) => ResultScreen(
     chatModel: chatModel,
     viewMode: ResultViewMode.history,
+  );
+  
+  /// Factory constructor for conversation mode (new - full conversation)
+  factory ResultScreen.conversation(FBConversationModel conversationModel, {bool isLegacy = false}) => ResultScreen(
+    conversationModel: conversationModel,
+    viewMode: ResultViewMode.conversation,
+    isLegacy: isLegacy,
   );
   
   @override
@@ -40,7 +52,11 @@ class _ResultScreenState extends State<ResultScreen> {
   final ChatController controller = Get.find<ChatController>();
 
   bool get isHistoryMode => widget.viewMode == ResultViewMode.history;
+  bool get isConversationMode => widget.viewMode == ResultViewMode.conversation;
   bool get isGenerationMode => widget.viewMode == ResultViewMode.generation;
+  
+  /// Show input field for conversation mode and history mode (for follow-ups)
+  bool get showInputField => isConversationMode || isHistoryMode;
 
   @override
   void initState() {
@@ -49,12 +65,19 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   void _init() {
-    if (isHistoryMode && widget.chatModel != null) {
+    if (isConversationMode && widget.conversationModel != null) {
+      // Load conversation with all its chats
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        controller.loadConversation(widget.conversationModel!, isLegacy: widget.isLegacy);
+      });
+    } else if (isHistoryMode && widget.chatModel != null) {
+      // Legacy: Load single chat (backwards compatibility)
       WidgetsBinding.instance.addPostFrameCallback((_) {
         controller.callHistory(widget.chatModel!);
       });
     }
   }
+
 
   @override
   void dispose() {
@@ -64,6 +87,7 @@ class _ResultScreenState extends State<ResultScreen> {
     });
     super.dispose();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +103,7 @@ class _ResultScreenState extends State<ResultScreen> {
             children: [
               _buildHeader(),
               Expanded(child: _buildMessageList()),
-              if (isHistoryMode) _buildInputField(),
+              if (showInputField) _buildInputField(),
             ],
           ),
         ),

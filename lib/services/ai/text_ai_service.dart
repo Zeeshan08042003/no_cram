@@ -63,25 +63,38 @@ $text
         );
 
 
-        print('Starting firebase');
-        /// ✅ SAVE TO FIRESTORE (MODEL-BASED)
-        final chat = FBChatModel(
-          id: '',
-          userId: userId??'',
-          mode: mode.key,
+        print('Starting firebase - Conversation based saving');
+        
+        /// ✅ CREATE CHAT ITEM WITH BOTH USER INPUT AND AI OUTPUT
+        final chatItem = FBChatItem(
+          id: '', // Will be assigned by FirestoreService
           createdAt: DateTime.now(),
-          userInput: UserInput(
-            prompt: text,
-          ),
-          aiOutput: AIResponse(
-            text: output,
-          ),
+          mode: mode.key,
+          isUserMessage: false,
+          userInput: UserInput(prompt: text),
+          aiOutput: AIResponse(text: output),
         );
 
-        await FirestoreService().createChat(chat);
+        final firestoreService = FirestoreService();
 
-
-
+        if (controller.isFollowUp) {
+          /// 🔄 ADD TO EXISTING CONVERSATION (Follow-up)
+          await firestoreService.addChatToConversation(
+            conversationId: controller.currentConversationId.value!,
+            latestMode: mode.key,
+            chatItem: chatItem,
+          );
+          print('✅ Follow-up chat added to conversation');
+        } else {
+          /// 🆕 CREATE NEW CONVERSATION
+          final conversationId = await firestoreService.createConversation(
+            userId: userId ?? '',
+            mode: mode.key,
+            chatItem: chatItem,
+          );
+          controller.currentConversationId.value = conversationId;
+          print('✅ New conversation created: $conversationId');
+        }
       }
     } catch (e, st) {
       print('[GEMINI ERROR] $e');
@@ -101,3 +114,4 @@ $text
 
 
 }
+

@@ -134,24 +134,41 @@ User question: $text
           text: output,
         );
 
-        /// 6️⃣ SAVE CHAT TO FIRESTORE (with multiple image URLs)
-        var chat = FBChatModel(
-          id: '',
-          userId: userId ?? '',
-          mode: ChatMode.explainImage.key,
+        /// 6️⃣ CREATE CHAT ITEM WITH BOTH USER INPUT AND AI OUTPUT
+        final chatItem = FBChatItem(
+          id: '', // Will be assigned by FirestoreService
           createdAt: DateTime.now(),
+          mode: ChatMode.explainImage.key,
+          isUserMessage: false,
           userInput: UserInput(
             prompt: text,
             imageUrl: imageUrls, // Save all image URLs
           ),
-          aiOutput: AIResponse(
-            text: output,
-          ),
+          aiOutput: AIResponse(text: output),
         );
 
-        await FirestoreService().createChat(chat);
+        final firestoreService = FirestoreService();
 
-        print("Object 5 - Chat saved to Firestore");
+        if (controller.isFollowUp) {
+          /// 🔄 ADD TO EXISTING CONVERSATION (Follow-up)
+          await firestoreService.addChatToConversation(
+            conversationId: controller.currentConversationId.value!,
+            latestMode: ChatMode.explainImage.key,
+            chatItem: chatItem,
+          );
+          print('✅ Follow-up image explanation added to conversation');
+        } else {
+          /// 🆕 CREATE NEW CONVERSATION
+          final conversationId = await firestoreService.createConversation(
+            userId: userId ?? '',
+            mode: ChatMode.explainImage.key,
+            chatItem: chatItem,
+          );
+          controller.currentConversationId.value = conversationId;
+          print('✅ New image explanation conversation created: $conversationId');
+        }
+
+        print("Object 5 - Chat saved to Firestore (conversation-based)");
       }
     } catch (e, st) {
       print('Gemini error in Explain Image: $e');
@@ -167,7 +184,6 @@ User question: $text
 
     controller.scrollToBottom();
   }
-
 
 
 

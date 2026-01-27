@@ -88,10 +88,18 @@ class ChatController extends GetxController {
   /// Maximum number of images that can be selected
   static const int maxImageCount = 5;
   
+  /// Current conversation ID - null means new conversation
+  /// When set, follow-up chats will be added to this conversation
+  final RxnString currentConversationId = RxnString(null);
+  
   final model = FirebaseAI.googleAI();
   final FirebaseRemoteConfig remoteConfig = FirebaseRemoteConfig.instance;
   var isGenerating = false.obs;
   var speechEnabled = false.obs;
+
+  /// Check if we're in a follow-up chat (existing conversation)
+  bool get isFollowUp => currentConversationId.value != null;
+
 
   @override
   void onInit() {
@@ -247,11 +255,66 @@ class ChatController extends GetxController {
     selectedMode.value = ChatMode.defaultMode;
     clearImages();
     isGenerating(false); // Reset generating state
+    currentConversationId.value = null; // Start a new conversation
   }
 
+  /// Load a conversation from history
+  /// Sets the currentConversationId so follow-ups are added to this conversation
+  /// If isLegacy is true, follow-ups will create a new conversation
+  loadConversation(FBConversationModel? conversation, {bool isLegacy = false}) {
+    // 🔥 RESET STATE
+    messages.clear();
+    print("Loading conversation history (isLegacy: $isLegacy)");
+    
+    if (conversation == null) {
+      currentConversationId.value = null;
+      return;
+    }
+
+    // Set conversation ID for follow-ups (only for non-legacy)
+    // Legacy chats don't exist in 'conversations' collection, so we create new conversation for follow-ups
+    currentConversationId.value = isLegacy ? null : conversation.id;
+    
+    final modeString = conversation.latestMode;
+    final mode = setChatMode(modeString);
+    print("Conversation mode is $modeString");
+    
+    // 🔥 SYNC MODE FOR HEADER
+    selectedMode.value = mode;
+
+    // Load all chats from the conversation
+    for (final chat in conversation.chats) {
+      // Add user message
+      messages.add(
+        FBChatItem.user(
+          prompt: chat.userInput.prompt,
+          mode: chat.mode,
+          imageUrl: chat.userInput.imageUrl,
+        ),
+      );
+
+      // Add AI response if exists
+      if (chat.aiOutput != null) {
+        messages.add(
+          FBChatItem.ai(
+            mode: chat.mode,
+            text: chat.aiOutput!.text ?? '',
+            imageUrls: chat.aiOutput!.imageUrls,
+          ),
+        );
+      }
+    }
+
+    print("Loaded ${conversation.chats.length} chats from conversation");
+    scrollToBottom();
+  }
+
+
+  /// Legacy method - still works with FBChatModel for backwards compatibility
   callHistory(FBChatModel? chatModel) {
     // 🔥 RESET STATE
     messages.clear();
+    currentConversationId.value = null; // Legacy chats create new conversations
     print("object is now in called history function");
     final modeString = chatModel?.mode ?? '';
     final mode = setChatMode(modeString);
@@ -298,7 +361,7 @@ class ChatController extends GetxController {
 
   setChatMode(String mode){
     print("mode is $mode");
-    if(mode == "Illustration") {
+    if(mode == "illustration" || mode == "Illustration") {
       return ChatMode.illustration;
     }else if(mode == "explainImage"){
       return ChatMode.explainImage;
@@ -309,3 +372,4 @@ class ChatController extends GetxController {
     }
   }
 }
+

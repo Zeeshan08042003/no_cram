@@ -16,8 +16,7 @@ class HistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var controller = Get.put(HistoryController());
-    // controller.bindChats();
+    Get.put(HistoryController());
     return DefaultTabController(
       length: _tabs.length,
       child: Scaffold(
@@ -109,7 +108,7 @@ class HistoryScreen extends StatelessWidget {
       dividerColor: Colors.transparent,
 
       labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-      overlayColor: MaterialStateProperty.all(Colors.transparent),
+      overlayColor: WidgetStateProperty.all(Colors.transparent),
       onTap: controller.changeTab,
       tabs: _tabs.map((tab) {
         return _ChipTab(label: tab.text!);
@@ -117,33 +116,15 @@ class HistoryScreen extends StatelessWidget {
     );
   }
 
-  // Widget _buildTabBar() {
-  //   final controller = Get.find<HistoryController>();
-  //
-  //   return TabBar(
-  //     isScrollable: true,
-  //     padding: const EdgeInsets.symmetric(horizontal: 16),
-  //     indicatorColor: Colors.transparent,
-  //     dividerColor: Colors.transparent,
-  //     overlayColor: MaterialStateProperty.all(Colors.transparent),
-  //
-  //     onTap: controller.changeTab, // ✅ IMPORTANT
-  //
-  //     tabs: _tabs.map((tab) {
-  //       return _ChipTab(label: tab.text!);
-  //     }).toList(),
-  //   );
-  // }
-
   // ---------------- HISTORY LIST ----------------
 
   Widget _buildHistoryList() {
     final controller = Get.find<HistoryController>();
 
     return Obx(() {
-      final grouped = controller.groupedChats;
+      final grouped = controller.groupedConversations;
 
-      if (controller.chats.isEmpty) {
+      if (controller.allConversations.isEmpty) {
         return const Center(
           child: Padding(
             padding: EdgeInsets.only(top: 60),
@@ -164,7 +145,7 @@ class HistoryScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: grouped.entries.map((entry) {
             final dateLabel = entry.key;
-            final chats = entry.value;
+            final conversations = entry.value;
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -172,7 +153,7 @@ class HistoryScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _sectionHeader(dateLabel),
-                  ...chats.map(_buildHistoryItemFromChat).toList(),
+                  ...conversations.map(_buildHistoryItemFromConversation).toList(),
                 ],
               ),
             );
@@ -198,10 +179,19 @@ class HistoryScreen extends StatelessWidget {
 
   // ---------------- HISTORY ITEM ----------------
 
-  Widget _buildHistoryItemFromChat(FBChatModel chat) {
-    final controller = Get.put(HistoryController());
-    final iconData = _iconForMode(chat.mode);
-    final iconColor = _colorForMode(chat.mode);
+  Widget _buildHistoryItemFromConversation(FBConversationModel conversation) {
+    final controller = Get.find<HistoryController>();
+    final iconData = _iconForMode(conversation.latestMode);
+    final iconColor = _colorForMode(conversation.latestMode);
+    
+    // Get the first chat's user input for preview
+    final previewText = controller.getConversationPreview(conversation);
+    final chatCount = controller.getChatCount(conversation);
+    
+    // Get first image URL if available
+    final firstChat = conversation.chats.isNotEmpty ? conversation.chats.first : null;
+    final hasImage = firstChat?.userInput.hasImages ?? false;
+    final firstImageUrl = firstChat?.userInput.firstImageUrl;
 
     return Obx(() {
       final isDeleteMode = controller.isDeleteMode.value;
@@ -224,25 +214,27 @@ class HistoryScreen extends StatelessWidget {
 
           // ---------- LEADING ----------
           leading: Container(
-            padding: chat.userInput.hasImages
+            padding: hasImage
                 ? EdgeInsets.zero
                 : const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: iconColor.withOpacity(0.12),
               borderRadius: BorderRadius.circular(8),
-              border: chat.userInput.hasImages
+              border: hasImage
                   ? Border.all(color: Colors.black12)
                   : null,
             ),
-            child: chat.userInput.hasImages
+            child: hasImage && firstImageUrl != null
                 ? ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(
                 height: 40,
                 width: 40,
                 child: Image.network(
-                  chat.userInput.firstImageUrl!,
+                  firstImageUrl,
                   fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      Icon(iconData, color: iconColor, size: 22),
                 ),
               ),
             )
@@ -251,7 +243,7 @@ class HistoryScreen extends StatelessWidget {
 
           // ---------- TEXT ----------
           title: Text(
-            chat.userInput.prompt,
+            previewText,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -260,7 +252,7 @@ class HistoryScreen extends StatelessWidget {
             ),
           ),
           subtitle: Text(
-            '${chat.mode.capitalizeFirst} • ${_formatTime(chat.createdAt)}',
+            '${conversation.latestMode.capitalizeFirst} • ${_formatTime(conversation.createdAt)}${chatCount > 1 ? ' • $chatCount chats' : ''}',
             style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
           ),
 
@@ -275,13 +267,13 @@ class HistoryScreen extends StatelessWidget {
               key: const ValueKey('delete'),
               onTap: () {
                 Get.defaultDialog(
-                  title: 'Delete chat?',
+                  title: 'Delete conversation?',
                   middleText:
-                  'This chat will be permanently removed.',
+                  'This conversation and all its chats will be permanently removed.',
                   confirm: ConfirmRedButton(
                     onTap: () {
                       Get.back();
-                      controller.deleteChat(chat);
+                      controller.deleteConversation(conversation);
                     },
                   ),
                 );
@@ -310,13 +302,15 @@ class HistoryScreen extends StatelessWidget {
           onTap: isDeleteMode
               ? null // 🚫 disable navigation in delete mode
               : () {
-            Get.to(() => ResultScreen.history(chat));
+            final isLegacy = controller.isLegacyChat(conversation);
+            Get.to(() => ResultScreen.conversation(conversation, isLegacy: isLegacy));
           },
         ),
       );
     });
   }
 }
+
 
 class _ChipTab extends StatelessWidget {
   final String label;
@@ -382,12 +376,12 @@ class _ChipTab extends StatelessWidget {
 }
 
 IconData _iconForMode(String mode) {
-  switch (mode) {
-    case 'Illustration':
+  switch (mode.toLowerCase()) {
+    case 'illustration':
       return Icons.palette_outlined;
-    case 'storyTelling':
+    case 'storytelling':
       return Icons.menu_book_outlined;
-    case 'explainImage':
+    case 'explainimage':
       return Icons.image_search_outlined;
     case 'video':
       return Icons.play_circle_outline;
@@ -397,12 +391,12 @@ IconData _iconForMode(String mode) {
 }
 
 Color _colorForMode(String mode) {
-  switch (mode) {
-    case 'Illustration':
+  switch (mode.toLowerCase()) {
+    case 'illustration':
       return Colors.purple;
-    case 'storyTelling':
+    case 'storytelling':
       return Colors.blue;
-    case 'explainImage':
+    case 'explainimage':
       return Colors.green;
     case 'video':
       return Colors.deepOrange;

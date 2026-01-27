@@ -68,20 +68,36 @@ $userInput
 
 
       if (loadingIndex < controller.messages.length) {
-        final chat = FBChatModel(
-          id: '',
-          userId: userId??'',
-          mode: ChatMode.storyTelling.key,
+        /// ✅ CREATE CHAT ITEM WITH BOTH USER INPUT AND AI OUTPUT
+        final chatItem = FBChatItem(
+          id: '', // Will be assigned by FirestoreService
           createdAt: DateTime.now(),
-          userInput: UserInput(
-            prompt: userInput,
-          ),
-          aiOutput: AIResponse(
-            text: output,
-          ),
+          mode: ChatMode.storyTelling.key,
+          isUserMessage: false,
+          userInput: UserInput(prompt: userInput),
+          aiOutput: AIResponse(text: output),
         );
 
-        await FirestoreService().createChat(chat);
+        final firestoreService = FirestoreService();
+
+        if (controller.isFollowUp) {
+          /// 🔄 ADD TO EXISTING CONVERSATION (Follow-up)
+          await firestoreService.addChatToConversation(
+            conversationId: controller.currentConversationId.value!,
+            latestMode: ChatMode.storyTelling.key,
+            chatItem: chatItem,
+          );
+          print('✅ Follow-up story added to conversation');
+        } else {
+          /// 🆕 CREATE NEW CONVERSATION
+          final conversationId = await firestoreService.createConversation(
+            userId: userId ?? '',
+            mode: ChatMode.storyTelling.key,
+            chatItem: chatItem,
+          );
+          controller.currentConversationId.value = conversationId;
+          print('✅ New story conversation created: $conversationId');
+        }
 
 
         controller.messages[loadingIndex] = FBChatItem.ai(

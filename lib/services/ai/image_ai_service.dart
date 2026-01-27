@@ -93,23 +93,36 @@ $userInput
         uploadedUrls.add(url);
       }
 
-      /// 6️⃣ SAVE USING SAME MODEL ✅
-      final chat = FBChatModel(
-        id: '',
-        userId: userId??'',
-        mode: ChatMode.illustration.key,
+      /// 6️⃣ CREATE CHAT ITEM WITH BOTH USER INPUT AND AI OUTPUT
+      final chatItem = FBChatItem(
+        id: '', // Will be assigned by FirestoreService
         createdAt: DateTime.now(),
+        mode: ChatMode.illustration.key,
+        isUserMessage: false,
         userInput: UserInput(prompt: userInput),
-        aiOutput: AIResponse(text: explainResponse.text, imageUrls: uploadedUrls)
+        aiOutput: AIResponse(text: explainResponse.text, imageUrls: uploadedUrls),
       );
 
-      final docRef = FirebaseFirestore.instance
-          .collection('chats')
-          .doc(); // 🔥 creates doc with ID
+      final firestoreService = FirestoreService();
 
-      await docRef.set(
-        FBChatModel.toFireStore(chat, docRef.id),
-      );
+      if (controller.isFollowUp) {
+        /// 🔄 ADD TO EXISTING CONVERSATION (Follow-up)
+        await firestoreService.addChatToConversation(
+          conversationId: controller.currentConversationId.value!,
+          latestMode: ChatMode.illustration.key,
+          chatItem: chatItem,
+        );
+        print('✅ Follow-up illustration added to conversation');
+      } else {
+        /// 🆕 CREATE NEW CONVERSATION
+        final conversationId = await firestoreService.createConversation(
+          userId: userId ?? '',
+          mode: ChatMode.illustration.key,
+          chatItem: chatItem,
+        );
+        controller.currentConversationId.value = conversationId;
+        print('✅ New illustration conversation created: $conversationId');
+      }
 
       /// 7️⃣ Update UI
       controller.messages[loadingIndex] = FBChatItem.ai(
@@ -131,3 +144,4 @@ $userInput
     controller.scrollToBottom();
   }
 }
+

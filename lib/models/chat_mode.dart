@@ -4,14 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class FBConversationModel {
   final String id;
   final String userId;
-  final String mode;
+  final String latestMode; // The most recent mode used in this conversation
   final DateTime createdAt;
   final List<FBChatItem> chats;
 
   FBConversationModel({
     required this.id,
     required this.userId,
-    required this.mode,
+    required this.latestMode,
     required this.createdAt,
     required this.chats,
   });
@@ -22,11 +22,26 @@ class FBConversationModel {
     return FBConversationModel(
       id: doc.id,
       userId: data['user_id'] ?? '',
-      mode: data['mode'] ?? 'default',
+      latestMode: data['latest_mode'] ?? 'default',
       createdAt:
-      (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          (data['created_at'] as Timestamp?)?.toDate() ?? DateTime.now(),
       chats: (data['chats'] as List<dynamic>? ?? [])
           .map((e) => FBChatItem.fromMap(e))
+          .toList(),
+    );
+  }
+
+  /// Create from Map (for non-DocumentSnapshot parsing)
+  factory FBConversationModel.fromMap(Map<String, dynamic> data, {required String id}) {
+    return FBConversationModel(
+      id: id,
+      userId: data['user_id'] ?? '',
+      latestMode: data['latest_mode'] ?? 'default',
+      createdAt: data['created_at'] is Timestamp
+          ? (data['created_at'] as Timestamp).toDate()
+          : DateTime.now(),
+      chats: (data['chats'] as List<dynamic>? ?? [])
+          .map((e) => FBChatItem.fromMap(Map<String, dynamic>.from(e)))
           .toList(),
     );
   }
@@ -35,10 +50,27 @@ class FBConversationModel {
     return {
       'id': id,
       'user_id': userId,
-      'mode': mode,
+      'latest_mode': latestMode,
       'created_at': Timestamp.fromDate(createdAt),
       'chats': chats.map((e) => e.toMap()).toList(),
     };
+  }
+
+  /// Create a copy with updated fields
+  FBConversationModel copyWith({
+    String? id,
+    String? userId,
+    String? latestMode,
+    DateTime? createdAt,
+    List<FBChatItem>? chats,
+  }) {
+    return FBConversationModel(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      latestMode: latestMode ?? this.latestMode,
+      createdAt: createdAt ?? this.createdAt,
+      chats: chats ?? this.chats,
+    );
   }
 }
 

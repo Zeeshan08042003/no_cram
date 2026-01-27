@@ -47,6 +47,107 @@ class FirestoreService {
   }
 
 
+  // ==================== CONVERSATION-BASED METHODS ====================
+
+  /// Create a new conversation with the first chat item
+  Future<String> createConversation({
+    required String userId,
+    required String mode,
+    required FBChatItem chatItem,
+  }) async {
+    String conversationId = UId.getId();
+    String chatId = UId.getId();
+    
+    // Assign ID to the chat item
+    final chatWithId = FBChatItem(
+      id: chatId,
+      createdAt: chatItem.createdAt,
+      mode: chatItem.mode,
+      userInput: chatItem.userInput,
+      aiOutput: chatItem.aiOutput,
+      isUserMessage: chatItem.isUserMessage,
+    );
+
+    final conversation = FBConversationModel(
+      id: conversationId,
+      userId: userId,
+      latestMode: mode,
+      createdAt: DateTime.now(),
+      chats: [chatWithId],
+    );
+
+    await db
+        .collection('conversations')
+        .doc(conversationId)
+        .set(conversation.toFirestore());
+
+    print('✅ Conversation created with ID: $conversationId');
+    return conversationId;
+  }
+
+  /// Add a new chat to an existing conversation (for follow-ups)
+  Future<void> addChatToConversation({
+    required String conversationId,
+    required String latestMode,
+    required FBChatItem chatItem,
+  }) async {
+    String chatId = UId.getId();
+    
+    // Assign ID to the chat item
+    final chatWithId = FBChatItem(
+      id: chatId,
+      createdAt: chatItem.createdAt,
+      mode: chatItem.mode,
+      userInput: chatItem.userInput,
+      aiOutput: chatItem.aiOutput,
+      isUserMessage: chatItem.isUserMessage,
+    );
+
+    await db.collection('conversations').doc(conversationId).update({
+      'latest_mode': latestMode,
+      'chats': FieldValue.arrayUnion([chatWithId.toMap()]),
+    });
+
+    print('✅ Chat added to conversation: $conversationId');
+  }
+
+  /// Get all conversations for a user (ordered by created_at desc)
+  Stream<List<FBConversationModel>> getConversationsByUser(String userId) {
+    return db
+        .collection('conversations')
+        .where('user_id', isEqualTo: userId)
+        .orderBy('created_at', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      var data = snapshot.docs
+          .map((doc) => FBConversationModel.fromMap(doc.data(), id: doc.id))
+          .toList();
+
+      print("Conversations fetched: ${data.length}");
+      return data;
+    });
+  }
+
+  /// Get a single conversation by ID
+  Future<FBConversationModel?> getConversationById(String conversationId) async {
+    final doc = await db.collection('conversations').doc(conversationId).get();
+    
+    if (!doc.exists) return null;
+    
+    return FBConversationModel.fromMap(doc.data()!, id: doc.id);
+  }
+
+  /// Update the latest mode of a conversation
+  Future<void> updateConversationLatestMode({
+    required String conversationId,
+    required String latestMode,
+  }) async {
+    await db.collection('conversations').doc(conversationId).update({
+      'latest_mode': latestMode,
+    });
+    print('✅ Conversation latest_mode updated to: $latestMode');
+  }
+
 
   Future<void> registerAndStoreUser(
       String email,
