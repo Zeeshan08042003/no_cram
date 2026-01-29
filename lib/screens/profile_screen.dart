@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../services/firebase/firestore_service.dart';
+import '../services/widgets/credit_balance_widget.dart';
 
 import '../utils/constants.dart';
 
@@ -68,10 +69,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 20),
             // Profile Header
             _buildProfileHeader(),
+            const SizedBox(height: 24),
+            // Credit Balance Card
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: CreditBalanceCard(),
+            ),
             const SizedBox(height: 30),
-            // Stats Row
-            // _buildStatsRow(),
-            // const SizedBox(height: 30),
             // Preferences Section
             _buildSectionTitle("PREFERENCES"),
             _buildPreferencesList(),

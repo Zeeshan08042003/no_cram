@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../controllers/credit_controller.dart';
 import '../controllers/subscription_controller.dart';
 import 'main_screen.dart';
 import 'signup_screen.dart';
@@ -15,7 +16,9 @@ class Splashscreen extends StatefulWidget {
 
 class _SplashscreenState extends State<Splashscreen> {
 
-  var controller = Get.put(SubscriptionController());
+  // Initialize controllers globally
+  final subscriptionController = Get.put(SubscriptionController());
+  final creditController = Get.put(CreditController());
 
   @override
   void initState() {
@@ -30,11 +33,28 @@ class _SplashscreenState extends State<Splashscreen> {
     final userId = prefs.getString('userId');
 
     if (userId != null && userId.isNotEmpty) {
-      // ✅ User already logged in
+      // ✅ User already logged in - initialize controllers
+      await _initializeControllersForUser(userId);
       Get.offAll(() => MainScreen());
     } else {
       // ❌ No user
       Get.offAll(() =>  SignUpScreen());
+    }
+  }
+
+  /// Initialize subscription and credit controllers for the logged-in user
+  Future<void> _initializeControllersForUser(String userId) async {
+    try {
+      // Initialize RevenueCat
+      await subscriptionController.init(userId);
+      
+      // CreditController auto-initializes via onInit, 
+      // but we can force refresh here
+      creditController.listenToCredits(userId);
+      
+      print('[SPLASH] Controllers initialized for user: $userId');
+    } catch (e) {
+      print('[SPLASH] Error initializing controllers: $e');
     }
   }
 
@@ -48,3 +68,4 @@ class _SplashscreenState extends State<Splashscreen> {
     );
   }
 }
+

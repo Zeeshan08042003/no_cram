@@ -9,6 +9,7 @@ import '../services/ai/explain_image_ai_service.dart';
 import '../services/ai/image_ai_service.dart';
 import '../services/ai/story_telling_ai_services.dart';
 import '../services/ai/text_ai_service.dart';
+import 'credit_controller.dart';
 
 /// ---------------- ENUM & MESSAGE MODEL ----------------
 
@@ -172,6 +173,22 @@ class ChatController extends GetxController {
 
     print("Mode is called ${mode.label}");
     print("📨 sendMessage | mode=${mode.key} | text='$text'");
+
+    // 🔒 CHECK CREDITS BEFORE PROCESSING
+    // Get CreditController and verify user has credits
+    try {
+      final creditController = Get.find<CreditController>();
+      final hasCredits = await creditController.checkAndConsumeCredit();
+      
+      if (!hasCredits) {
+        print("❌ Insufficient credits - blocking search");
+        return;
+      }
+      print("✅ Credit consumed successfully");
+    } catch (e) {
+      print("⚠️ CreditController not found, proceeding without credit check: $e");
+      // In development or if controller not initialized, allow the request
+    }
 
     isGenerating(true);
     // 1️⃣ Explain Image flow

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/chat_controller.dart';
+import '../services/widgets/credit_balance_widget.dart';
 
 class HomeScreen extends StatelessWidget {
   HomeScreen({super.key});
@@ -65,48 +66,8 @@ class HomeScreen extends StatelessWidget {
                                     fontSize: 18, fontWeight: FontWeight.w600),
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black
-                                        .withOpacity(0.08), // shadow color
-                                    blurRadius: 8, // softness
-                                    spreadRadius: 1, // size of shadow
-                                    offset:
-                                        const Offset(0, 3), // vertical shadow
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.bolt,
-                                      color: Colors.blueAccent, size: 22),
-                                  const SizedBox(width: 0),
-                                  RichText(
-                                      text: TextSpan(children: [
-                                    TextSpan(text: '20 ', style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.black,fontFamily: 'Poppins'
-                                    )),
-                                    TextSpan(
-                                      text: 'Credit ',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.black, fontFamily: 'Poppins'
-                                      ),
-                                    ),
-                                  ])),
-                                ],
-                              ),
-                            ),
+                            // Dynamic credit balance widget
+                            const CreditBalanceWidget(compact: true),
                           ],
                         ),
 
