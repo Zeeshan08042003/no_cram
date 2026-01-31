@@ -109,7 +109,6 @@ $userInput
         /// 🔄 ADD TO EXISTING CONVERSATION (Follow-up)
         await firestoreService.addChatToConversation(
           conversationId: controller.currentConversationId.value!,
-          latestMode: ChatMode.illustration.key,
           chatItem: chatItem,
         );
         print('✅ Follow-up illustration added to conversation');

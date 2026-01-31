@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/chat_controller.dart';
+import '../services/ai/explain_image_ai_service.dart';
 import '../services/widgets/credit_balance_widget.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -325,7 +326,7 @@ class HomeScreen extends StatelessWidget {
             maxLines: null, // unlimited
             keyboardType: TextInputType.multiline,
             decoration: const InputDecoration(
-              hintText: 'Ask anything you want to learn...',
+              hintText: "Help me understand Newton's 2nd law of motion...",
               border: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.symmetric(vertical: 6),
@@ -337,10 +338,6 @@ class HomeScreen extends StatelessWidget {
           // Buttons row aligned to the bottom-right
           Row(
             children: [
-              // Spacer pushes the buttons to the right
-              const Spacer(),
-
-              // Mic button (compact)
               Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFFEFF7FF),
@@ -348,15 +345,18 @@ class HomeScreen extends StatelessWidget {
                 ),
                 padding: const EdgeInsets.all(8),
                 child: InkWell(
-                  onTap: () {
-
+                  onTap: () async {
+                    await ExplainImageAiService().chooseImageSourceForExplain();
                   },
                   borderRadius: BorderRadius.circular(12),
-                  child: const Icon(Icons.mic, color: Colors.blue),
+                  child: const Icon(Icons.photo, color: Colors.blue),
                 ),
               ),
 
               const SizedBox(width: 10),
+
+              // Spacer pushes the buttons to the right
+              const Spacer(),
 
               // Teach Me button
               ElevatedButton(

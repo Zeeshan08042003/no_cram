@@ -153,7 +153,6 @@ User question: $text
           /// 🔄 ADD TO EXISTING CONVERSATION (Follow-up)
           await firestoreService.addChatToConversation(
             conversationId: controller.currentConversationId.value!,
-            latestMode: ChatMode.explainImage.key,
             chatItem: chatItem,
           );
           print('✅ Follow-up image explanation added to conversation');

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:nocram/controllers/subscription_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -10,6 +12,11 @@ class AuthController extends GetxController{
   var obscurePassword = true.obs;
   var isLoading = false.obs;
   var loginLoading = false.obs;
+  var googleLoading = false.obs;
+  
+  // Google Sign-In instance (6.x API)
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
 
   final nameCtrl = TextEditingController();
@@ -197,6 +204,85 @@ class AuthController extends GetxController{
     }
   }
 
+  /// Google Sign-In using 6.x API
+  Future<void> signInWithGoogle() async {
+    googleLoading(true);
+    
+    try {
+      // 1️⃣ Trigger Google Sign-In flow
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      
+      if (googleUser == null) {
+        // User cancelled the sign-in
+        googleLoading(false);
+        return;
+      }
+      
+      // 2️⃣ Get authentication details
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      
+      // 3️⃣ Create Firebase credential
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      
+      // 4️⃣ Sign in to Firebase
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      final User? user = userCredential.user;
+      
+      if (user == null) {
+        throw Exception('Google Sign-In failed');
+      }
+      
+      // 5️⃣ Store user in Firestore (if new user)
+      await FirestoreService().storeGoogleUser(user);
+      
+      // 6️⃣ Save userId to SharedPreferences
+      final pref = await SharedPreferences.getInstance();
+      await pref.setString('userId', user.uid);
+      
+      // 7️⃣ Initialize subscription
+      subscriptionController.init(user.uid);
+      
+      // ✅ SUCCESS → Navigate to main screen
+      googleLoading(false);
+      Get.offAll(() => MainScreen());
+      
+      Get.snackbar(
+        'Welcome!',
+        'Signed in as ${user.displayName ?? user.email}',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green.shade600,
+        colorText: Colors.white,
+      );
+      
+    } catch (e) {
+      googleLoading(false);
+      print('❌ Google Sign-In error: $e');
+      
+      Get.snackbar(
+        'Sign-In Failed',
+        _mapAuthError(e),
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.shade600,
+        colorText: Colors.white,
+      );
+    }
+  }
 
-
+  /// Sign out (for Google and Firebase)
+  Future<void> signOut() async {
+    try {
+      await _googleSignIn.signOut();
+      await _auth.signOut();
+      
+      final pref = await SharedPreferences.getInstance();
+      await pref.remove('userId');
+      
+      print('✅ User signed out');
+    } catch (e) {
+      print('❌ Sign out error: $e');
+    }
+  }
 }

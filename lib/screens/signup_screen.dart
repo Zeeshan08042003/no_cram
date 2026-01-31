@@ -188,10 +188,12 @@ class SignUpScreen extends StatelessWidget {
 class GoogleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: () {
-        // TODO: Google Sign-In
-      },
+    final authController = Get.find<AuthController>();
+    
+    return Obx(() => OutlinedButton(
+      onPressed: authController.googleLoading.value 
+          ? null 
+          : () => authController.signInWithGoogle(),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 14),
         side: BorderSide(color: Colors.grey.shade300),
@@ -199,24 +201,30 @@ class GoogleButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(30),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Image.network(
-            'https://upload.wikimedia.org/wikipedia/commons/0/09/IOS_Google_icon.png',
-            height: 22,
-          ),
-          const SizedBox(width: 10),
-          const Text(
-            "Google",
-            style: TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.w600,
+      child: authController.googleLoading.value
+          ? const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.network(
+                  'https://upload.wikimedia.org/wikipedia/commons/0/09/IOS_Google_icon.png',
+                  height: 22,
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  "Google",
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
+    ));
   }
 }
 

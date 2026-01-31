@@ -51,6 +51,8 @@ dependencies:
   uid: ^0.0.2
   shared_preferences: ^2.5.3
   purchases_flutter: ^9.10.2
+  firebase_auth: ^6.1.4
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   flutter_test:

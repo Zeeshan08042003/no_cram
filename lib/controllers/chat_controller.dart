@@ -82,6 +82,8 @@ class ChatController extends GetxController {
   var storyTellingServices = StoryTellingServices();
   var explainImageServices = ExplainImageAiService();
   final selectedMode = ChatMode.defaultMode.obs;
+  /// Display mode for header - shows the original/first mode selected (doesn't change after generation)
+  final displayMode = ChatMode.defaultMode.obs;
   var showAttachmentPanel = false.obs;
   /// Multiple images support - list of image bytes
   final RxList<Uint8List> selectedImageBytesList = <Uint8List>[].obs;
@@ -174,8 +176,27 @@ class ChatController extends GetxController {
     print("Mode is called ${mode.label}");
     print("📨 sendMessage | mode=${mode.key} | text='$text'");
 
-    // 🔒 CHECK CREDITS BEFORE PROCESSING
-    // Get CreditController and verify user has credits
+    // 🎯 REQUIRE MODE SELECTION BEFORE SEARCHING (only for initial search)
+    // User must select a learning style first, but follow-ups can use default (text) mode
+    if (mode == ChatMode.defaultMode && !isFollowUp) {
+      Get.snackbar(
+        '📚 Choose a Learning Style',
+        'Please select a mode (Illustration, Story, etc.) before searching',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orange.shade600,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(16),
+        borderRadius: 12,
+        icon: const Icon(Icons.school, color: Colors.white),
+      );
+      print("❌ No mode selected - blocking search");
+      return;
+    }
+
+    // 🔒 CREDIT CHECK DISABLED FOR TESTING
+    // Uncomment the block below to re-enable credit checking
+    /*
     try {
       final creditController = Get.find<CreditController>();
       final hasCredits = await creditController.checkAndConsumeCredit();
@@ -187,15 +208,24 @@ class ChatController extends GetxController {
       print("✅ Credit consumed successfully");
     } catch (e) {
       print("⚠️ CreditController not found, proceeding without credit check: $e");
-      // In development or if controller not initialized, allow the request
     }
+    */
+    print("ℹ️ Credit check disabled for testing");
 
     isGenerating(true);
+    
+    // Set display mode for header (only for first message, not follow-ups)
+    if (!isFollowUp) {
+      displayMode.value = mode;
+    }
+    
     // 1️⃣ Explain Image flow
     if (mode == ChatMode.explainImage) {
       // Navigate to result screen so user sees the result view
       Get.to(() => ResultScreen.generation());
       await explainImageServices.imageExplanation(text);
+      // Reset mode to default for follow-up questions
+      selectedMode.value = ChatMode.defaultMode;
       isGenerating(false);
       return;
     }
@@ -229,6 +259,11 @@ class ChatController extends GetxController {
       print("📝 Text mode started");
       await textServices.handleTextGeneration(text, mode);
     }
+    
+    // Reset mode to default for follow-up questions
+    selectedMode.value = ChatMode.defaultMode;
+    print("🔄 Mode reset to default for follow-up questions");
+    
     isGenerating(false);
     scrollToBottom();
   }
@@ -270,6 +305,7 @@ class ChatController extends GetxController {
   clearMessage() {
     messages.clear();
     selectedMode.value = ChatMode.defaultMode;
+    displayMode.value = ChatMode.defaultMode;
     clearImages();
     isGenerating(false); // Reset generating state
     currentConversationId.value = null; // Start a new conversation
@@ -296,8 +332,10 @@ class ChatController extends GetxController {
     final mode = setChatMode(modeString);
     print("Conversation mode is $modeString");
     
-    // 🔥 SYNC MODE FOR HEADER
-    selectedMode.value = mode;
+    // 🔥 Keep mode as default for follow-up questions
+    // The header will show the original mode from displayMode
+    selectedMode.value = ChatMode.defaultMode;
+    displayMode.value = mode; // Show original mode in header
 
     // Load all chats from the conversation
     for (final chat in conversation.chats) {
@@ -336,8 +374,10 @@ class ChatController extends GetxController {
     final modeString = chatModel?.mode ?? '';
     final mode = setChatMode(modeString);
     print("object of mode is $modeString");
-    // 🔥 SYNC MODE FOR HEADER
-    selectedMode.value = mode;
+    // 🔥 Keep mode as default for follow-up questions
+    // The header will show the original mode from displayMode
+    selectedMode.value = ChatMode.defaultMode;
+    displayMode.value = mode; // Show original mode in header
 
     print(selectedMode);
     // USER MESSAGE

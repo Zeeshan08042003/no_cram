@@ -86,9 +86,9 @@ class FirestoreService {
   }
 
   /// Add a new chat to an existing conversation (for follow-ups)
+  /// Note: latestMode is NOT updated here - it stays as the initial mode
   Future<void> addChatToConversation({
     required String conversationId,
-    required String latestMode,
     required FBChatItem chatItem,
   }) async {
     String chatId = UId.getId();
@@ -104,7 +104,7 @@ class FirestoreService {
     );
 
     await db.collection('conversations').doc(conversationId).update({
-      'latest_mode': latestMode,
+      // latest_mode is NOT updated - it stays as the initial mode
       'chats': FieldValue.arrayUnion([chatWithId.toMap()]),
     });
 
@@ -191,7 +191,36 @@ class FirestoreService {
     }
   }
 
-
+  /// Store Google Sign-In user in Firestore
+  /// Creates user profile only if it doesn't exist
+  Future<void> storeGoogleUser(User user) async {
+    try {
+      final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final doc = await docRef.get();
+      
+      if (!doc.exists) {
+        // New user - create profile
+        final userModel = UserModel(
+          userId: user.uid,
+          email: user.email ?? '',
+          firstName: user.displayName ?? 'User',
+          createdAt: DateTime.now(),
+        );
+        
+        await docRef.set(UserModel.toFireStore(userModel, user.uid));
+        print('✅ New Google user stored in Firestore');
+      } else {
+        print('ℹ️ Google user already exists in Firestore');
+      }
+      
+      // Ensure credits exist for this user
+      await createCreditsIfNotExists(user.uid);
+      
+    } catch (e) {
+      print('❌ Error storing Google user: $e');
+      rethrow;
+    }
+  }
 
   Future<UserModel> loginUser(
       String email,

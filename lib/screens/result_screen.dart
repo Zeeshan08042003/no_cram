@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/chat_mode.dart';
 import '../controllers/chat_controller.dart';
+import '../services/ai/explain_image_ai_service.dart';
 import 'chat_screen.dart';
 import 'message_bubble.dart';
 
@@ -93,7 +94,7 @@ class _ResultScreenState extends State<ResultScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () {
-        controller.selectedMode.value = ChatMode.defaultMode;
+        // Mode is already reset to default after generation completes in ChatController
         return Future.value(true);
       },
       child: Scaffold(
@@ -103,7 +104,7 @@ class _ResultScreenState extends State<ResultScreen> {
             children: [
               _buildHeader(),
               Expanded(child: _buildMessageList()),
-              if (showInputField) _buildInputField(),
+              _buildInputField(),
             ],
           ),
         ),
@@ -188,29 +189,14 @@ class _ResultScreenState extends State<ResultScreen> {
             children: [
               // ➕ PLUS BUTTON
               GestureDetector(
-                onTap: () {
-                  if (controller.showAttachmentPanel.value) {
-                    // Panel is open, close it and show keyboard
-                    controller.toggleAttachmentPanel();
-                    controller.textFocusNode.requestFocus();
-                  } else {
-                    // Panel is closed, hide keyboard and open panel
-                    FocusScope.of(context).unfocus();
-                    controller.toggleAttachmentPanel();
-                  }
+                onTap: () async {
+                  await ExplainImageAiService().chooseImageSourceForExplain();
                 },
-                child: Obx(
-                  () => Padding(
+                child: Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: Icon(
-                      controller.showAttachmentPanel.value
-                          ? Icons.keyboard_alt_outlined
-                          : Icons.add,
-                      color: Colors.grey[700],
-                    ),
+                    child: Icon(Icons.photo, color: Colors.blue),
                   ),
                 ),
-              ),
 
               const SizedBox(width: 8),
 
@@ -300,7 +286,7 @@ class _ResultScreenState extends State<ResultScreen> {
         },
         keyboardType: TextInputType.multiline,
         decoration: const InputDecoration(
-          hintText: 'Ask anything you want to learn...',
+          hintText: 'Ask follow up questions',
           border: InputBorder.none,
           isDense: true,
           contentPadding: EdgeInsets.zero,
@@ -390,7 +376,7 @@ class _ResultScreenState extends State<ResultScreen> {
               children: [
                 Obx(
                   () => Text(
-                    "${controller.selectedMode.value.label.capitalizeFirst} Mode",
+                    "${controller.displayMode.value.label.capitalizeFirst} Mode",
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
