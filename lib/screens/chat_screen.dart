@@ -3,23 +3,19 @@ import 'package:get/get.dart';
 import '../controllers/chat_controller.dart';
 import '../services/ai/explain_image_ai_service.dart';
 import '../services/widgets/credit_balance_widget.dart';
+import '../utils/app_themes.dart';
 
 class HomeScreen extends StatelessWidget {
   HomeScreen({super.key});
 
   var controller = Get.put(ChatController());
 
-  // Color palette (from earlier)
-  final Color primaryBlue = const Color(0xFF1A73E8);
-  final Color accentGreen = const Color(0xFF34A853);
-  final Color warmYellow = const Color(0xFFFBBC05);
-  final Color softRed = const Color(0xFFEA4335);
-  final Color bg = const Color(0xFFF6F8FA);
-
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDark;
+    
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: context.backgroundColor,
       body: SafeArea(
         // allow bottom nav to handle the bottom inset, avoid double padding
         bottom: false,
@@ -48,23 +44,25 @@ class HomeScreen extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: context.cardColor,
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                      color: Colors.black.withOpacity(0.04),
+                                      color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
                                       blurRadius: 6)
                                 ],
                               ),
                               child: Icon(Icons.school,
-                                  color: primaryBlue, size: 22),
+                                  color: AppColors.primaryBlue, size: 22),
                             ),
                             const SizedBox(width: 12),
-                            const Expanded(
+                            Expanded(
                               child: Text(
-                                'Teach Me',
+                                'No Cram',
                                 style: TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.w600),
+                                    fontSize: 18, 
+                                    fontWeight: FontWeight.w600,
+                                    color: context.textPrimary),
                               ),
                             ),
                             // Dynamic credit balance widget
@@ -79,16 +77,18 @@ class HomeScreen extends StatelessWidget {
                           alignment: Alignment.centerLeft,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
+                            children: [
                               Text(
                                 'Hey 👋',
                                 style: TextStyle(
-                                    fontSize: 28, fontWeight: FontWeight.bold),
+                                    fontSize: 28, 
+                                    fontWeight: FontWeight.bold,
+                                    color: context.textPrimary),
                               ),
-                              SizedBox(height: 6),
+                              const SizedBox(height: 6),
                               Text('What shall we learn today?',
                                   style: TextStyle(
-                                    color: Colors.grey,
+                                    color: context.textSecondary,
                                   )),
                             ],
                           ),
@@ -101,7 +101,7 @@ class HomeScreen extends StatelessWidget {
                           alignment: Alignment.centerLeft,
                           child: Text('Choose a learning style',
                               style: TextStyle(
-                                  color: Colors.grey[700],
+                                  color: context.textSecondary,
                                   fontWeight: FontWeight.w600)),
                         ),
                         const SizedBox(height: 8),
@@ -119,10 +119,11 @@ class HomeScreen extends StatelessWidget {
                                       ChatMode.illustration,
                                   onTap: () => controller
                                       .changeMode(ChatMode.illustration),
-                                  selectedColor:
-                                      primaryBlue, // visible when selected
-                                  unselectedColor:
-                                      Colors.white, // visible when unselected
+                                  selectedColor: AppColors.primaryBlue,
+                                  unselectedColor: context.cardColor,
+                                  labelColor: isDark ? Colors.white : Colors.black,
+                                  selectedLabelColor: isDark ? Colors.white : Colors.black,
+                                  borderColor: context.dividerColor,
                                 ),
                                 const SizedBox(width: 10),
                                 ChoiceChipCard(
@@ -132,9 +133,11 @@ class HomeScreen extends StatelessWidget {
                                       ChatMode.storyTelling,
                                   onTap: () => controller
                                       .changeMode(ChatMode.storyTelling),
-                                  selectedColor:
-                                      primaryBlue, // green when selected
-                                  unselectedColor: Colors.white,
+                                  selectedColor: AppColors.primaryBlue,
+                                  unselectedColor: context.cardColor,
+                                  labelColor: isDark ? Colors.white : Colors.black,
+                                  selectedLabelColor: isDark ? Colors.white : Colors.black,
+                                  borderColor: context.dividerColor,
                                 ),
                                 const SizedBox(width: 10),
                                 ChoiceChipCard(
@@ -144,21 +147,53 @@ class HomeScreen extends StatelessWidget {
                                       ChatMode.explainImage,
                                   onTap: () => controller
                                       .changeMode(ChatMode.explainImage),
-                                  selectedColor:
-                                      primaryBlue, // green when selected
-                                  unselectedColor: Colors.white,
+                                  selectedColor: AppColors.primaryBlue,
+                                  unselectedColor: context.cardColor,
+                                  labelColor: isDark ? Colors.white : Colors.black,
+                                  selectedLabelColor: isDark ? Colors.white : Colors.black,
+                                  borderColor: context.dividerColor,
                                 ),
                                 const SizedBox(width: 10),
                                 ChoiceChipCard(
                                   label: 'Video',
                                   icon: Icons.play_circle_outline,
-                                  isSelected: controller.selectedMode.value ==
-                                      ChatMode.video,
-                                  onTap: () =>
-                                      controller.changeMode(ChatMode.video),
-                                  selectedColor:
-                                      primaryBlue, // green when selected
-                                  unselectedColor: Colors.white,
+                                  isSelected: false, // Never selected since it's coming soon
+                                  onTap: () {
+                                    // Show Coming Soon snackbar
+                                    Get.snackbar(
+                                      '',
+                                      '',
+                                      snackPosition: SnackPosition.BOTTOM,
+                                      backgroundColor: AppColors.primaryBlue,
+                                      duration: const Duration(seconds: 2),
+                                      margin: const EdgeInsets.all(16),
+                                      borderRadius: 12,
+                                      icon: const Icon(Icons.rocket_launch, color: Colors.white),
+
+                                      titleText: const Text(
+                                        '🎬 Coming Soon!',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+
+                                      messageText: const Text(
+                                        'Video explanations are on the way. Stay tuned!',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w400,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  selectedColor: AppColors.primaryBlue,
+                                  unselectedColor: context.cardColor,
+                                  labelColor: isDark ? Colors.white70 : Colors.black45, // Slightly faded to indicate unavailable
+                                  selectedLabelColor: isDark ? Colors.white : Colors.black,
+                                  borderColor: context.dividerColor,
                                 ),
                                 const SizedBox(width: 6),
                               ],
@@ -169,7 +204,7 @@ class HomeScreen extends StatelessWidget {
                         const SizedBox(height: 18),
 
                         // INPUT CARD (main)
-                        _buildInputCard(),
+                        _buildInputCard(context),
 
                         const SizedBox(height: 16),
 
@@ -178,7 +213,7 @@ class HomeScreen extends StatelessWidget {
                           alignment: Alignment.centerLeft,
                           child: Text('TRY ASKING:',
                               style: TextStyle(
-                                  color: Colors.grey[600],
+                                  color: context.textSecondary,
                                   fontWeight: FontWeight.w700)),
                         ),
 
@@ -188,9 +223,9 @@ class HomeScreen extends StatelessWidget {
                           spacing: 10,
                           runSpacing: 8,
                           children: [
-                            _pill('Explain photosynthesis', Icons.eco),
-                            _pill('Algebra basics', Icons.square_foot),
-                            _pill('Why do volcanoes erupt?', Icons.whatshot),
+                            _pill(context, 'Explain photosynthesis', Icons.eco),
+                            _pill(context, 'Algebra basics', Icons.square_foot),
+                            _pill(context, 'Why do volcanoes erupt?', Icons.whatshot),
                           ],
                         ),
 
@@ -208,14 +243,19 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInputCard() {
+  Widget _buildInputCard(BuildContext context) {
+    final isDark = context.isDark;
+    
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.cardColor,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.transparent),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12)
+          BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+              blurRadius: 12)
         ],
       ),
       padding: const EdgeInsets.all(14),
@@ -243,7 +283,7 @@ class HomeScreen extends StatelessWidget {
                           '${imageList.length} image${imageList.length > 1 ? 's' : ''} selected',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[600],
+                            color: context.textSecondary,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -325,11 +365,17 @@ class HomeScreen extends StatelessWidget {
             minLines: 4,
             maxLines: null, // unlimited
             keyboardType: TextInputType.multiline,
-            decoration: const InputDecoration(
+            style: TextStyle(color: context.textPrimary),
+            decoration: InputDecoration(
               hintText: "Help me understand Newton's 2nd law of motion...",
+              hintStyle: TextStyle(color: context.textTertiary),
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
               isDense: true,
-              contentPadding: EdgeInsets.symmetric(vertical: 6),
+              contentPadding: const EdgeInsets.symmetric(vertical: 6),
             ),
           ),
 
@@ -340,7 +386,9 @@ class HomeScreen extends StatelessWidget {
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF7FF),
+                  color: isDark 
+                      ? AppColors.primaryBlue.withOpacity(0.15)
+                      : const Color(0xFFEFF7FF),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 padding: const EdgeInsets.all(8),
@@ -349,7 +397,7 @@ class HomeScreen extends StatelessWidget {
                     await ExplainImageAiService().chooseImageSourceForExplain();
                   },
                   borderRadius: BorderRadius.circular(12),
-                  child: const Icon(Icons.photo, color: Colors.blue),
+                  child: Icon(Icons.photo, color: AppColors.primaryBlue),
                 ),
               ),
 
@@ -358,80 +406,121 @@ class HomeScreen extends StatelessWidget {
               // Spacer pushes the buttons to the right
               const Spacer(),
 
-              // Teach Me button
-              ElevatedButton(
-                onPressed: controller.sendMessage,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF07A0FF),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                ),
-                child: const Text('Teach Me',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w600, color: Colors.white)),
-              ),
+              // Teach Me button - Optimized for fast response
+              Obx(() {
+                final text = controller.textValue.value.trim();
+                final mode = controller.selectedMode.value;
+                final hasImages = controller.selectedImageBytesList.isNotEmpty;
+                
+                final isEnabled = mode != ChatMode.defaultMode &&
+                    text.isNotEmpty &&
+                    (mode != ChatMode.explainImage || hasImages);
+                
+                return ElevatedButton(
+                  onPressed: () {
+                    if (isEnabled) {
+                      controller.sendMessage();
+                    } else {
+                      _showRequirementDialog(context, mode, text.isEmpty, hasImages);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isEnabled 
+                        ? AppColors.primaryBlue 
+                        : AppColors.primaryBlue.withOpacity(0.4),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  ),
+                  child: Text('Teach Me',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600, 
+                          color: isEnabled ? Colors.white : Colors.white.withOpacity(0.6))),
+                );
+              }),
             ],
           ),
 
           const SizedBox(height: 8),
-
-          // Optional 2x2 chip grid (mirror of your ChatScreen)
-          // Column(
-          //   children: [
-          //     Row(
-          //       children: [
-          //         Expanded(child: _gridChip(ChatMode.draw, 'Illustration')),
-          //         const SizedBox(width: 8),
-          //         Expanded(child: _gridChip(ChatMode.story, 'Story')),
-          //       ],
-          //     ),
-          //     const SizedBox(height: 8),
-          //     Row(
-          //       children: [
-          //         Expanded(child: _gridChip(ChatMode.analyze, 'Explain Image', isIcon: true)),
-          //         const SizedBox(width: 8),
-          //         Expanded(child: _gridChip(ChatMode.video, 'Video')),
-          //       ],
-          //     ),
-          //   ],
-          // ),
         ],
       ),
     );
   }
 
-  Widget _gridChip(ChatMode mode, String label, {bool isIcon = false}) {
-    return Obx(() {
-      final isSelected = controller.selectedMode.value == mode;
-      return GestureDetector(
-        onTap: () => controller.changeMode(mode),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.white : Colors.black,
-            borderRadius: BorderRadius.circular(50),
-            border: Border.all(
-                color: isSelected ? Colors.white : Colors.grey.shade300),
-          ),
-          child: Center(
-            child: isIcon
-                ? Icon(Icons.image_search_outlined,
-                    size: 16, color: isSelected ? Colors.black : Colors.white)
-                : Text(label,
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: isSelected ? Colors.black : Colors.white,
-                        fontWeight: FontWeight.w600)),
+  void _showRequirementDialog(BuildContext context, ChatMode mode, bool textEmpty, bool hasImages) {
+    String title;
+    String message;
+    
+    if (mode == ChatMode.defaultMode && textEmpty) {
+      title = 'Get Started';
+      message = 'Please choose a learning style and enter what you want to learn.';
+    } else if (mode == ChatMode.defaultMode && !textEmpty) {
+      title = 'Choose a Learning Style';
+      message = 'Please select how you want to learn (Illustration, Story, Image Explanation, or Video) before proceeding.';
+    } else if (mode != ChatMode.defaultMode && textEmpty) {
+      title = 'Enter Your Question';
+      message = "Ask a question and let's learn it step by step.";
+    } else if (mode == ChatMode.explainImage && !hasImages) {
+      title = 'Add an Image';
+      message = 'Please select at least one image to explain.';
+    } else {
+      title = 'Almost There!';
+      message = 'Please complete all required fields to continue.';
+    }
+    
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: context.cardColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.school, 
+              color: AppColors.primaryBlue,
+              size: 24,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: context.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: TextStyle(
+            color: context.textSecondary,
+            fontSize: 14,
           ),
         ),
-      );
-    });
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'Got it',
+              style: TextStyle(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _pill(String text, IconData? icon) {
+  Widget _pill(BuildContext context, String text, IconData? icon) {
+    final isDark = context.isDark;
+    
     return GestureDetector(
       onTap: () {
         controller.textController.text = text;
@@ -439,51 +528,24 @@ class HomeScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.cardColor,
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6)
+            BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.15 : 0.03), 
+                blurRadius: 6)
           ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (icon != null) Icon(icon, size: 16, color: Colors.grey[700]),
+            if (icon != null) Icon(icon, size: 16, color: context.textSecondary),
             if (icon != null) const SizedBox(width: 8),
             Text(text,
-                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+                style: TextStyle(fontSize: 13, color: context.textPrimary)),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _bottomNavBar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      color: bg,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _navItem(Icons.home, 'Home', true),
-          _navItem(Icons.history, 'History', false),
-          _navItem(Icons.person, 'Profile', false),
-        ],
-      ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String label, bool active) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: active ? const Color(0xFF07A0FF) : Colors.grey),
-        const SizedBox(height: 6),
-        Text(label,
-            style: TextStyle(
-                color: active ? const Color(0xFF07A0FF) : Colors.grey,
-                fontSize: 12)),
-      ],
     );
   }
 }
@@ -493,10 +555,13 @@ class ChoiceChipCard extends StatelessWidget {
   final IconData? icon;
   final bool isSelected;
   final VoidCallback? onTap;
-  final Color selectedColor; // background when selected (outer)
-  final Color unselectedColor; // background when unselected (outer)
+  final Color selectedColor;
+  final Color unselectedColor;
   final Color selectedIconColor;
   final Color unselectedIconColor;
+  final Color? labelColor;
+  final Color? selectedLabelColor;
+  final Color? borderColor;
   final double size;
 
   const ChoiceChipCard({
@@ -505,10 +570,13 @@ class ChoiceChipCard extends StatelessWidget {
     this.icon,
     this.isSelected = false,
     this.onTap,
-    this.selectedColor = const Color(0xFF1A73E8), // primary
+    this.selectedColor = const Color(0xFF1A73E8),
     this.unselectedColor = Colors.white,
     this.selectedIconColor = Colors.black,
     this.unselectedIconColor = const Color(0xFF6B6B6B),
+    this.labelColor,
+    this.selectedLabelColor,
+    this.borderColor,
     this.size = 70,
   }) : super(key: key);
 
@@ -516,10 +584,12 @@ class ChoiceChipCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Visual decisions
     final outerBg = isSelected ? selectedColor : unselectedColor;
-    final borderColor = isSelected ? Colors.transparent : Colors.grey.shade300;
+    final effectiveBorderColor = isSelected ? Colors.transparent : (borderColor ?? Colors.grey.shade300);
     final innerCircleColor = isSelected ? Colors.white : Colors.transparent;
     final iconColor = isSelected ? selectedIconColor : unselectedIconColor;
-    final labelColor = isSelected ? selectedIconColor : Colors.black87;
+    final effectiveLabelColor = isSelected 
+        ? (selectedLabelColor ?? selectedIconColor) 
+        : (labelColor ?? Colors.black87);
     final shadow = isSelected
         ? [
             BoxShadow(
@@ -544,7 +614,7 @@ class ChoiceChipCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: outerBg,
                 shape: BoxShape.circle,
-                border: Border.all(color: borderColor),
+                border: Border.all(color: effectiveBorderColor),
                 boxShadow: shadow ?? [],
               ),
               child: Center(
@@ -571,7 +641,7 @@ class ChoiceChipCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: labelColor,
+                  color: effectiveLabelColor,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

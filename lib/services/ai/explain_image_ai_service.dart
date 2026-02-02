@@ -13,19 +13,52 @@ import '../firebase/firebase_config.dart';
 import '../firebase/firestore_service.dart';
 
 class ExplainImageAiService {
-  // final _model = FirebaseAI.googleAI()
-  //     .generativeModel(model: 'gemini-2.5-flash');
-  //
-  // Future<String> explainImage(Uint8List bytes, String prompt) async {
-  //   final response = await _model.generateContent([
-  //     Content.multi([
-  //       TextPart(prompt),
-  //       InlineDataPart('image/jpeg', bytes),
-  //     ])
-  //   ]);
-  //
-  //   return response.text ?? '';
-  // }
+
+  /// Build conversation context for follow-up questions about images
+  String _buildFollowUpContext(ChatController controller, String currentQuestion) {
+    final previousMessages = controller.messages;
+    
+    if (previousMessages.isEmpty) {
+      return currentQuestion;
+    }
+
+    final StringBuffer context = StringBuffer();
+    
+    context.writeln('''
+=== FOLLOW-UP IMAGE EXPLANATION CONTEXT ===
+This is a follow-up question about images you previously explained.
+IMPORTANT INSTRUCTIONS:
+1. Continue from your previous explanation - do not start from scratch
+2. Do NOT repeat details already explained
+3. Go deeper into the specific aspect the user is asking about
+4. Reference the images you already analyzed
+5. Connect new explanations to what was already discussed
+6. Be specific and build upon previous context
+
+=== PREVIOUS CONVERSATION ===
+''');
+
+    for (int i = 0; i < previousMessages.length; i++) {
+      final msg = previousMessages[i];
+      if (msg.isUserMessage) {
+        context.writeln('USER ASKED: ${msg.userInput.prompt}');
+      } else {
+        final aiText = msg.aiOutput?.text ?? '';
+        final truncatedText = aiText.length > 500 
+            ? '${aiText.substring(0, 500)}...[explanation continues...]' 
+            : aiText;
+        context.writeln('YOUR EXPLANATION: $truncatedText');
+      }
+      context.writeln('');
+    }
+
+    context.writeln('=== NEW FOLLOW-UP QUESTION ===');
+    context.writeln('USER NOW ASKS: $currentQuestion');
+    context.writeln('');
+    context.writeln('Provide an explanation that builds on what was already discussed without repeating previous details:');
+
+    return context.toString();
+  }
 
   final _imagePicker = ImagePicker();
 
@@ -80,19 +113,34 @@ class ExplainImageAiService {
     
     // Use multi_image_prompt when multiple images are selected
     final isMultiImage = imageBytesList.length > 1;
-    final basePrompt = isMultiImage
-        ? (cfg.explainImageValue?.multiImagePrompt ??
-            '''
+    
+    // Check if this is a follow-up question
+    String basePrompt;
+    if (controller.isFollowUp) {
+      // For follow-up: include conversation history with special instructions
+      final followUpContext = _buildFollowUpContext(controller, text);
+      basePrompt = '''
+You are a kind, clear college teacher helping a student understand something from images.
+
+$followUpContext
+''';
+      print('[IMAGE AI] Using follow-up context with ${controller.messages.length} previous messages');
+    } else {
+      // For new conversation
+      basePrompt = isMultiImage
+          ? (cfg.explainImageValue?.multiImagePrompt ??
+              '''
 You are a kind, clear college teacher helping a student understand something from multiple images of notes, diagrams, or handwritten work.
 Carefully review all provided images together before answering. Treat them as parts of a single explanation unless they clearly show different topics.
 User question: $text
 ''')
-        : (cfg.explainImageValue?.explainImagePrompt ??
-            '''
+          : (cfg.explainImageValue?.explainImagePrompt ??
+              '''
 You are a kind, clear college teacher helping a student understand something from an image of notes or a diagram.
 Use only the content visible in the image to answer.
 User question: $text
 ''');
+    }
 
     try {
       /// 3️⃣ GEMINI IMAGE EXPLANATION (with all images)

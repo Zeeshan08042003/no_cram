@@ -484,15 +484,19 @@ class BuyCreditsBottomSheet extends StatelessWidget {
 
   void _handleRestore(BuildContext context) async {
     try {
-      final subscriptionController = Get.find<SubscriptionController>();
-      await subscriptionController.restorePurchases();
+      // Add 20 credits on restore for testing
+      final creditController = Get.find<CreditController>();
+      await creditController.addCreditsAfterPurchase(20);
+      
+      Get.back(); // Close sheet
       
       Get.snackbar(
-        'Restore Complete',
-        'Your purchases have been restored',
+        '✅ Restore Complete',
+        'Your 20 credits have been restored!',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.green.shade600,
         colorText: Colors.white,
+        duration: const Duration(seconds: 2),
       );
     } catch (e) {
       Get.snackbar(

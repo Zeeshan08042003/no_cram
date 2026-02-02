@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../utils/app_themes.dart';
 import 'chat_screen.dart';
 import 'history_screen.dart';
 import 'profile_screen.dart';
@@ -9,18 +10,16 @@ class MainScreen extends StatelessWidget {
 
   final BottomNavController nav = Get.put(BottomNavController());
 
-  final pages =  [
+  final pages = [
     HomeScreen(),
     HistoryScreen(),
     ProfileScreen(),
   ];
 
-  final Color bg = const Color(0xFFF6F8FA);
-
   @override
   Widget build(BuildContext context) {
     return Obx(
-          () => WillPopScope(
+      () => WillPopScope(
         onWillPop: () async {
           // 🔙 If not on Home, go to Home instead of exiting
           if (nav.currentIndex.value != 0) {
@@ -30,33 +29,44 @@ class MainScreen extends StatelessWidget {
           return true; // allow app close
         },
         child: Scaffold(
-          backgroundColor: bg,
+          backgroundColor: context.backgroundColor,
           body: IndexedStack(
             index: nav.currentIndex.value,
             children: pages,
           ),
-          bottomNavigationBar: _bottomNavBar(),
+          bottomNavigationBar: SafeArea(
+            top: false,
+            child: _bottomNavBar(context),
+          ),
         ),
       ),
     );
   }
 
-  Widget _bottomNavBar() {
+  Widget _bottomNavBar(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      color: const Color(0xffFFFFFF),
+      decoration: BoxDecoration(
+        color: context.surfaceColor,
+        border: Border(
+          top: BorderSide(
+            color: context.dividerColor,
+            width: 0.5,
+          ),
+        ),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _navItem(Icons.home, 'Home', 0),
-          _navItem(Icons.history, 'History', 1),
-          _navItem(Icons.person, 'Profile', 2),
+          _navItem(context, Icons.home, 'Home', 0),
+          _navItem(context, Icons.history, 'History', 1),
+          _navItem(context, Icons.person, 'Profile', 2),
         ],
       ),
     );
   }
 
-  Widget _navItem(IconData icon, String label, int index) {
+  Widget _navItem(BuildContext context, IconData icon, String label, int index) {
     final nav = Get.find<BottomNavController>();
     final active = nav.currentIndex.value == index;
 
@@ -68,13 +78,17 @@ class MainScreen extends StatelessWidget {
         children: [
           Icon(
             icon,
-            color: active ? const Color(0xFF07A0FF) : Colors.grey,
+            color: active 
+                ? AppColors.primaryBlue 
+                : context.textTertiary,
           ),
           const SizedBox(height: 6),
           Text(
             label,
             style: TextStyle(
-              color: active ? const Color(0xFF07A0FF) : Colors.grey,
+              color: active 
+                  ? AppColors.primaryBlue 
+                  : context.textTertiary,
               fontSize: 12,
             ),
           ),

@@ -10,6 +10,52 @@ import '../firebase/firestore_service.dart';
 
 class StoryTellingServices{
 
+  /// Build conversation context for follow-up questions
+  String _buildFollowUpContext(ChatController controller, String currentQuestion) {
+    final previousMessages = controller.messages;
+    
+    if (previousMessages.isEmpty) {
+      return currentQuestion;
+    }
+
+    final StringBuffer context = StringBuffer();
+    
+    context.writeln('''
+=== FOLLOW-UP STORY CONTEXT ===
+This is a follow-up question about a story you previously told.
+IMPORTANT INSTRUCTIONS:
+1. Continue the story or explanation - do not start a new story from scratch
+2. Do NOT repeat the story elements already told
+3. Expand on the existing story or add new chapters/elements
+4. Keep the same characters and setting if applicable
+5. Make the continuation feel natural and connected
+6. If asked about a new topic, creatively connect it to the previous story
+
+=== PREVIOUS STORY/CONVERSATION ===
+''');
+
+    for (int i = 0; i < previousMessages.length; i++) {
+      final msg = previousMessages[i];
+      if (msg.isUserMessage) {
+        context.writeln('USER ASKED: ${msg.userInput.prompt}');
+      } else {
+        final aiText = msg.aiOutput?.text ?? '';
+        final truncatedText = aiText.length > 600 
+            ? '${aiText.substring(0, 600)}...[story continues...]' 
+            : aiText;
+        context.writeln('STORY: $truncatedText');
+      }
+      context.writeln('');
+    }
+
+    context.writeln('=== NEW FOLLOW-UP REQUEST ===');
+    context.writeln('USER NOW ASKS: $currentQuestion');
+    context.writeln('');
+    context.writeln('Continue the story or explanation building on what was already told:');
+
+    return context.toString();
+  }
+
   handleStoryPrompt(String userInput) async {
     var controller = Get.find<ChatController>();
     var pref = await SharedPreferences.getInstance();
@@ -28,7 +74,7 @@ class StoryTellingServices{
         ? cfg.storyValue!.model!.trim()
         : 'gemini-2.5-flash';
 
-    print("📖 Story telling | selectedMode=${controller.selectedMode.value.label}");
+    print("📖 Story telling | selectedMode=${controller.selectedMode.value.label} isFollowUp=${controller.isFollowUp}");
     print("📖 Story telling | model=$textModelName");
 
     final loadingIndex = controller.messages.length;
@@ -41,12 +87,24 @@ class StoryTellingServices{
     controller.scrollToBottom();
 
     try {
-      final promptText = '''
+      // Build prompt with context for follow-ups
+      final String promptText;
+      if (controller.isFollowUp) {
+        final followUpContext = _buildFollowUpContext(controller, userInput);
+        promptText = '''
+$systemInstruction
+
+$followUpContext
+''';
+        print('📖 Using follow-up context with ${controller.messages.length} previous messages');
+      } else {
+        promptText = '''
 $systemInstruction
 
 Student's topic:
 $userInput
 ''';
+      }
 
       final storyModel =
       FirebaseAI.googleAI().generativeModel(model: textModelName);

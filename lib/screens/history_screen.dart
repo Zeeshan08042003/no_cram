@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/history_controller.dart';
 import '../models/chat_mode.dart';
+import '../utils/app_themes.dart';
 import 'result_screen.dart';
 
 class HistoryScreen extends StatelessWidget {
@@ -20,14 +21,14 @@ class HistoryScreen extends StatelessWidget {
     return DefaultTabController(
       length: _tabs.length,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF6F8FA),
+        backgroundColor: context.backgroundColor,
         body: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(context),
-              _buildTabBar(),
-              Expanded(child: _buildHistoryList()),
+              _buildTabBar(context),
+              Expanded(child: _buildHistoryList(context)),
             ],
           ),
         ),
@@ -39,25 +40,31 @@ class HistoryScreen extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-      color: const Color(0xFFF6F8FA),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      color: context.backgroundColor,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const Expanded(
+          Expanded(
             child: Text(
               'History',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Colors.black,
+                color: context.textPrimary,
               ),
             ),
           ),
 
-          // Edit button
+          // Edit button - only show if there are conversations
           Obx(() {
             final controller = Get.find<HistoryController>();
+            final hasConversations = controller.allConversations.isNotEmpty;
+            
+            if (!hasConversations) {
+              return const SizedBox.shrink();
+            }
+            
             final isActive = controller.isDeleteMode.value;
 
             return ElevatedButton(
@@ -65,11 +72,11 @@ class HistoryScreen extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 elevation: 0,
                 backgroundColor:
-                    isActive ? const Color(0xFF07A0FF) : Colors.white,
+                    isActive ? AppColors.primaryBlue : context.cardColor,
                 foregroundColor:
-                    isActive ? Colors.white : const Color(0xFF07A0FF),
+                    isActive ? Colors.white : AppColors.primaryBlue,
                 side: BorderSide(
-                  color: const Color(0xFF07A0FF),
+                  color: AppColors.primaryBlue,
                   width: 1.5,
                 ),
                 padding:
@@ -94,7 +101,7 @@ class HistoryScreen extends StatelessWidget {
 
   // ---------------- TAB BAR ----------------
 
-  Widget _buildTabBar() {
+  Widget _buildTabBar(BuildContext context) {
     final controller = Get.find<HistoryController>();
     return TabBar(
       isScrollable: true,
@@ -109,30 +116,55 @@ class HistoryScreen extends StatelessWidget {
 
       labelPadding: const EdgeInsets.symmetric(horizontal: 6),
       overlayColor: WidgetStateProperty.all(Colors.transparent),
-      onTap: controller.changeTab,
-      tabs: _tabs.map((tab) {
-        return _ChipTab(label: tab.text!);
+      onTap: (index) {
+        // Video tab (index 3) - show Coming Soon
+        if (index == 3) {
+          Get.snackbar(
+            '🎬 Coming Soon!',
+            'Video explanations are on the way. Stay tuned!',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: AppColors.primaryBlue,
+            colorText: Colors.white,
+            duration: const Duration(seconds: 2),
+            margin: const EdgeInsets.all(16),
+            borderRadius: 12,
+            icon: const Icon(Icons.rocket_launch, color: Colors.white),
+          );
+          // Stay on current tab
+          DefaultTabController.of(context).animateTo(controller.selectedTab.value);
+          return;
+        }
+        controller.changeTab(index);
+      },
+      tabs: _tabs.asMap().entries.map((entry) {
+        final index = entry.key;
+        final tab = entry.value;
+        // Make Video tab slightly faded
+        return _ChipTab(
+          label: tab.text!, 
+          isDisabled: index == 3,
+        );
       }).toList(),
     );
   }
 
   // ---------------- HISTORY LIST ----------------
 
-  Widget _buildHistoryList() {
+  Widget _buildHistoryList(BuildContext context) {
     final controller = Get.find<HistoryController>();
 
     return Obx(() {
       final grouped = controller.groupedConversations;
 
       if (controller.allConversations.isEmpty) {
-        return const Center(
+        return Center(
           child: Padding(
-            padding: EdgeInsets.only(top: 60),
+            padding: const EdgeInsets.only(top: 60),
             child: Text(
               'No history yet',
               style: TextStyle(
                 fontSize: 16,
-                color: Colors.grey,
+                color: context.textSecondary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -152,8 +184,8 @@ class HistoryScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _sectionHeader(dateLabel),
-                  ...conversations.map(_buildHistoryItemFromConversation).toList(),
+                  _sectionHeader(context, dateLabel),
+                  ...conversations.map((conv) => _buildHistoryItemFromConversation(context, conv)).toList(),
                 ],
               ),
             );
@@ -163,13 +195,13 @@ class HistoryScreen extends StatelessWidget {
     });
   }
 
-  Widget _sectionHeader(String title) {
+  Widget _sectionHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Text(
         title,
         style: TextStyle(
-          color: Colors.grey.shade600,
+          color: context.textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w700,
         ),
@@ -179,7 +211,7 @@ class HistoryScreen extends StatelessWidget {
 
   // ---------------- HISTORY ITEM ----------------
 
-  Widget _buildHistoryItemFromConversation(FBConversationModel conversation) {
+  Widget _buildHistoryItemFromConversation(BuildContext context, FBConversationModel conversation) {
     final controller = Get.find<HistoryController>();
     final iconData = _iconForMode(conversation.latestMode);
     final iconColor = _colorForMode(conversation.latestMode);
@@ -195,15 +227,16 @@ class HistoryScreen extends StatelessWidget {
 
     return Obx(() {
       final isDeleteMode = controller.isDeleteMode.value;
+      final isDark = context.isDark;
 
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.cardColor,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
               blurRadius: 10,
             ),
           ],
@@ -218,10 +251,10 @@ class HistoryScreen extends StatelessWidget {
                 ? EdgeInsets.zero
                 : const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.12),
+              color: iconColor.withOpacity(isDark ? 0.2 : 0.12),
               borderRadius: BorderRadius.circular(8),
               border: hasImage
-                  ? Border.all(color: Colors.black12)
+                  ? Border.all(color: context.dividerColor)
                   : null,
             ),
             child: hasImage && firstImageUrl != null
@@ -246,14 +279,15 @@ class HistoryScreen extends StatelessWidget {
             previewText,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w500,
+              color: context.textPrimary,
             ),
           ),
           subtitle: Text(
             '${conversation.latestMode.capitalizeFirst} • ${_formatTime(conversation.createdAt)}${chatCount > 1 ? ' • $chatCount chats' : ''}',
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 11, color: context.textSecondary),
           ),
 
           // ---------- TRAILING ----------
@@ -268,8 +302,13 @@ class HistoryScreen extends StatelessWidget {
               onTap: () {
                 Get.defaultDialog(
                   title: 'Delete conversation?',
+                  titlePadding: const EdgeInsets.all(16),
+                  // contentPadding: EdgeInsets.symmetric(),
+                  titleStyle: TextStyle(color: context.textPrimary),
                   middleText:
                   'This conversation and all its chats will be permanently removed.',
+                  middleTextStyle: TextStyle(color: context.textSecondary),
+                  backgroundColor: context.cardColor,
                   confirm: ConfirmRedButton(
                     onTap: () {
                       Get.back();
@@ -291,10 +330,10 @@ class HistoryScreen extends StatelessWidget {
                 ),
               ),
             )
-                : const Icon(
+                : Icon(
               Icons.chevron_right,
-              key: ValueKey('arrow'),
-              color: Colors.grey,
+              key: const ValueKey('arrow'),
+              color: context.textTertiary,
             ),
           ),
 
@@ -314,33 +353,33 @@ class HistoryScreen extends StatelessWidget {
 
 class _ChipTab extends StatelessWidget {
   final String label;
-  const _ChipTab({required this.label});
+  final bool isDisabled;
+  const _ChipTab({required this.label, this.isDisabled = false});
 
   @override
   Widget build(BuildContext context) {
     final tabController = DefaultTabController.of(context)!;
+    final isDark = context.isDark;
 
     return AnimatedBuilder(
       animation: tabController,
       builder: (context, _) {
-        final isSelected = tabController.index == tabController.previousIndex
-            ? tabController.index == _tabIndex(label)
-            : tabController.index == _tabIndex(label);
+        final isSelected = !isDisabled && tabController.index == _tabIndex(label);
 
         return AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF07A0FF) : Colors.white,
+            color: isSelected ? AppColors.primaryBlue : context.cardColor,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
               color:
-                  isSelected ? const Color(0xFF07A0FF) : Colors.grey.shade300,
+                  isSelected ? AppColors.primaryBlue : context.dividerColor,
             ),
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                      color: const Color(0xFF07A0FF).withOpacity(0.25),
+                      color: AppColors.primaryBlue.withOpacity(0.25),
                       blurRadius: 8,
                     ),
                   ]
@@ -349,7 +388,10 @@ class _ChipTab extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black87,
+              // Faded text for disabled tabs
+              color: isDisabled 
+                  ? (isDark ? Colors.white38 : Colors.black38)
+                  : (isSelected ? Colors.white : context.textPrimary),
               fontWeight: FontWeight.w600,
               fontSize: 14,
             ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
@@ -88,6 +89,9 @@ class ChatController extends GetxController {
   /// Multiple images support - list of image bytes
   final RxList<Uint8List> selectedImageBytesList = <Uint8List>[].obs;
   
+  /// Reactive text value for button state
+  final RxString textValue = ''.obs;
+  
   /// Maximum number of images that can be selected
   static const int maxImageCount = 5;
   
@@ -99,16 +103,34 @@ class ChatController extends GetxController {
   final FirebaseRemoteConfig remoteConfig = FirebaseRemoteConfig.instance;
   var isGenerating = false.obs;
   var speechEnabled = false.obs;
+  
+  /// Cached CreditController for ultra-fast credit checks
+  CreditController? _creditController;
 
   /// Check if we're in a follow-up chat (existing conversation)
   bool get isFollowUp => currentConversationId.value != null;
+  
+  /// Quick credit check - uses cached controller
+  bool get hasCredits => _creditController?.canSearch ?? true;
 
 
   @override
   void onInit() {
     super.onInit();
-    // If you want the controller to ensure RC is fetched/activated here,
-    // you could call remoteConfig.fetchAndActivate() — but it's often done once in main().
+    // Listen to text controller changes to update reactive value
+    textController.addListener(() {
+      textValue.value = textController.text;
+    });
+    // Pre-cache credit controller for instant access
+    _initCreditController();
+  }
+  
+  void _initCreditController() {
+    try {
+      _creditController = Get.find<CreditController>();
+    } catch (e) {
+      // Will be null if not found
+    }
   }
 
   /// Add image bytes to the selected list
@@ -194,29 +216,21 @@ class ChatController extends GetxController {
       return;
     }
 
-    // 🔒 CREDIT CHECK DISABLED FOR TESTING
-    // Uncomment the block below to re-enable credit checking
-    /*
-    try {
-      final creditController = Get.find<CreditController>();
-      final hasCredits = await creditController.checkAndConsumeCredit();
-      
-      if (!hasCredits) {
-        print("❌ Insufficient credits - blocking search");
-        return;
-      }
-      print("✅ Credit consumed successfully");
-    } catch (e) {
-      print("⚠️ CreditController not found, proceeding without credit check: $e");
+    // 🔒 INSTANT CREDIT CHECK - Uses cached controller, no lookup overhead
+    if (_creditController != null && !_creditController!.canSearch) {
+      _creditController!.showBuyCreditsSheet();
+      return;
     }
-    */
-    print("ℹ️ Credit check disabled for testing");
 
-    isGenerating(true);
+    // 🚀 IMMEDIATE STATE UPDATE - No delays
+    isGenerating.value = true;
     
-    // Set display mode for header (only for first message, not follow-ups)
-    if (!isFollowUp) {
-      displayMode.value = mode;
+    // Set display mode (first message only)
+    if (!isFollowUp) displayMode.value = mode;
+    
+    // Consume credit in next microtask (after UI frame)
+    if (_creditController != null) {
+      scheduleMicrotask(() => _creditController!.checkAndConsumeCredit());
     }
     
     // 1️⃣ Explain Image flow

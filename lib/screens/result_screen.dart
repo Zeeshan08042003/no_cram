@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../models/chat_mode.dart';
 import '../controllers/chat_controller.dart';
 import '../services/ai/explain_image_ai_service.dart';
+import '../utils/app_themes.dart';
 import 'chat_screen.dart';
 import 'message_bubble.dart';
 
@@ -98,13 +99,14 @@ class _ResultScreenState extends State<ResultScreen> {
         return Future.value(true);
       },
       child: Scaffold(
-        backgroundColor: Colors.grey[200],
+        backgroundColor: context.backgroundColor,
         body: SafeArea(
+          bottom: false, // We handle bottom padding in _buildInputField
           child: Column(
             children: [
-              _buildHeader(),
-              Expanded(child: _buildMessageList()),
-              _buildInputField(),
+              _buildHeader(context),
+              Expanded(child: _buildMessageList(context)),
+              _buildInputField(context),
             ],
           ),
         ),
@@ -112,19 +114,22 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  Widget _buildInputField() {
+  Widget _buildInputField(BuildContext context) {
+    final isDark = context.isDark;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
             blurRadius: 12,
           ),
         ],
       ),
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      padding: EdgeInsets.fromLTRB(10, 10, 10, 10 + bottomPadding),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -194,19 +199,19 @@ class _ResultScreenState extends State<ResultScreen> {
                 },
                 child: Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: Icon(Icons.photo, color: Colors.blue),
+                    child: Icon(Icons.photo, color: AppColors.primaryBlue),
                   ),
                 ),
 
               const SizedBox(width: 8),
 
               // TEXT FIELD (ALWAYS VISIBLE)
-              Expanded(child: _buildTextInput()),
+              Expanded(child: _buildTextInput(context)),
 
               const SizedBox(width: 8),
 
               // SEND BUTTON (ALWAYS VISIBLE)
-              _buildSendButton(),
+              _buildSendButton(context),
             ],
           ),
 
@@ -215,7 +220,7 @@ class _ResultScreenState extends State<ResultScreen> {
             return controller.showAttachmentPanel.value
                 ? Padding(
               padding: const EdgeInsets.only(top: 16),
-              child: _buildAttachmentPanel(),
+              child: _buildAttachmentPanel(context),
             )
                 : const SizedBox.shrink();
           }),
@@ -225,23 +230,26 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   void _handleSend() {
-    // TODO: Implement follow-up question logic
     controller.sendMessage();
   }
 
-  Widget _buildSendButton() {
-    return Obx(
-          () => GestureDetector(
-        onTap: controller.isGenerating.isTrue ? null : controller.sendMessage,
+  Widget _buildSendButton(BuildContext context) {
+    return Obx(() {
+      final isGenerating = controller.isGenerating.isTrue;
+      final hasText = controller.textValue.value.trim().isNotEmpty;
+      final canSend = !isGenerating && hasText;
+      
+      return GestureDetector(
+        onTap: canSend ? () => controller.sendMessage() : null,
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: controller.isGenerating.isTrue
-                ? Colors.grey
-                : const Color(0xFF07A0FF),
+            color: isGenerating
+                ? context.textTertiary
+                : (canSend ? AppColors.primaryBlue : AppColors.primaryBlue.withOpacity(0.4)),
             shape: BoxShape.circle,
           ),
-          child: controller.isGenerating.isTrue
+          child: isGenerating
               ? const SizedBox(
             width: 20,
             height: 20,
@@ -250,21 +258,25 @@ class _ResultScreenState extends State<ResultScreen> {
               color: Colors.white,
             ),
           )
-              : const Icon(Icons.send, color: Colors.white, size: 20),
+              : Icon(Icons.send, 
+                  color: canSend ? Colors.white : Colors.white.withOpacity(0.6), 
+                  size: 20),
         ),
-      ),
-    );
+      );
+    });
   }
 
 
-  Widget _buildTextInput() {
+  Widget _buildTextInput(BuildContext context) {
+    final isDark = context.isDark;
+    
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.surfaceColor,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.08),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -276,6 +288,7 @@ class _ResultScreenState extends State<ResultScreen> {
         focusNode: controller.textFocusNode,
         minLines: 1,
         maxLines: null,
+        style: TextStyle(color: context.textPrimary),
         onTap: (){
           controller.showAttachmentPanel.value == false;
 
@@ -285,17 +298,23 @@ class _ResultScreenState extends State<ResultScreen> {
           });
         },
         keyboardType: TextInputType.multiline,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           hintText: 'Ask follow up questions',
+          hintStyle: TextStyle(color: context.textTertiary),
           border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
           isDense: true,
+          fillColor: Colors.transparent,
           contentPadding: EdgeInsets.zero,
         ),
       ),
     );
   }
 
-  Widget _buildAttachmentPanel() {
+  Widget _buildAttachmentPanel(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20),
       child: GridView.count(
@@ -305,7 +324,6 @@ class _ResultScreenState extends State<ResultScreen> {
         mainAxisSpacing: 24,
         crossAxisSpacing: 24,
         children: [
-          // const SizedBox(width: 2),
           ChoiceChipCard(
             label: 'Illustration',
             size: 50,
@@ -314,9 +332,10 @@ class _ResultScreenState extends State<ResultScreen> {
                 ChatMode.illustration,
             onTap: () => controller
                 .changeMode(ChatMode.illustration),
-            selectedColor: Color(0xFF1A73E8), // visible when selected
-            unselectedColor:
-            Colors.white, // visible when unselected
+            selectedColor: AppColors.primaryBlue,
+            unselectedColor: context.cardColor,
+            labelColor: context.textPrimary,
+            borderColor: context.dividerColor,
           ),
           ChoiceChipCard(
             label: 'Story',
@@ -326,8 +345,10 @@ class _ResultScreenState extends State<ResultScreen> {
                 ChatMode.storyTelling,
             onTap: () => controller
                 .changeMode(ChatMode.storyTelling),
-            selectedColor:Color(0xFF1A73E8), // green when selected
-            unselectedColor: Colors.white,
+            selectedColor: AppColors.primaryBlue,
+            unselectedColor: context.cardColor,
+            labelColor: context.textPrimary,
+            borderColor: context.dividerColor,
           ),
           ChoiceChipCard(
             label: 'Image Explanation',
@@ -337,8 +358,10 @@ class _ResultScreenState extends State<ResultScreen> {
                 ChatMode.explainImage,
             onTap: () => controller
                 .changeMode(ChatMode.explainImage),
-            selectedColor:Color(0xFF1A73E8), // green when selected
-            unselectedColor: Colors.white,
+            selectedColor: AppColors.primaryBlue,
+            unselectedColor: context.cardColor,
+            labelColor: context.textPrimary,
+            borderColor: context.dividerColor,
           ),
           ChoiceChipCard(
             label: 'Video',
@@ -348,8 +371,10 @@ class _ResultScreenState extends State<ResultScreen> {
                 ChatMode.video,
             onTap: () =>
                 controller.changeMode(ChatMode.video),
-            selectedColor:Color(0xFF1A73E8), // green when selected
-            unselectedColor: Colors.white,
+            selectedColor: AppColors.primaryBlue,
+            unselectedColor: context.cardColor,
+            labelColor: context.textPrimary,
+            borderColor: context.dividerColor,
           ),
         ],
       ),
@@ -357,10 +382,11 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.black12)),
+      decoration: BoxDecoration(
+        color: context.cardColor,
+        border: Border(bottom: BorderSide(color: context.dividerColor)),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
@@ -369,7 +395,7 @@ class _ResultScreenState extends State<ResultScreen> {
           children: [
             GestureDetector(
               onTap: () => Get.back(),
-              child: const Icon(Icons.arrow_back_ios, color: Colors.black),
+              child: Icon(Icons.arrow_back_ios, color: context.textPrimary),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -377,58 +403,45 @@ class _ResultScreenState extends State<ResultScreen> {
                 Obx(
                   () => Text(
                     "${controller.displayMode.value.label.capitalizeFirst} Mode",
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: Colors.black,
+                      color: context.textPrimary,
                     ),
                   ),
                 ),
                 const SizedBox(height: 2),
-                _buildStatusText(),
+                _buildStatusText(context),
               ],
             ),
-            const Icon(Icons.more_vert, color: Colors.black),
+            Icon(Icons.more_vert, color: context.textPrimary),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatusText() {
-    // History mode shows static "From History" text
-    // if (isHistoryMode) {
-    //   return const Text(
-    //     "From History",
-    //     style: TextStyle(
-    //       fontSize: 10,
-    //       fontWeight: FontWeight.w600,
-    //       color: Colors.blueGrey,
-    //     ),
-    //   );
-    // }
-    
-    // Generation mode shows dynamic Generating/Generated status
+  Widget _buildStatusText(BuildContext context) {
     return Obx(
       () => Text(
         controller.isGenerating.isTrue ? "Generating..." : "Generated",
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
-          color: Colors.green,
+          color: AppColors.success,
         ),
       ),
     );
   }
 
-  Widget _buildMessageList() {
+  Widget _buildMessageList(BuildContext context) {
     return Obx(() {
       final messages = controller.messages;
       if (messages.isEmpty) {
-        return const Center(
+        return Center(
           child: Text(
             'No messages yet.',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: context.textSecondary),
           ),
         );
       }

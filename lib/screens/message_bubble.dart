@@ -12,6 +12,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:shimmer/shimmer.dart';
 import '../services/widgets/download_widget.dart';
+import '../utils/app_themes.dart';
 
 class MessageBubble extends StatefulWidget {
   final String text;
@@ -72,23 +73,25 @@ class _MessageBubbleState extends State<MessageBubble>
   // ───────────────── MARKDOWN RENDERER ─────────────────
 
   Widget _markdown(String text) {
+    final isDark = Get.context != null && Get.context!.isDark;
     return MarkdownBody(
       data: text,
       selectable: true,
       styleSheet: MarkdownStyleSheet(
-        p: const TextStyle(
+        p: TextStyle(
           fontSize: 14,
           height: 1.45,
           fontWeight: FontWeight.w600,
-          color: Colors.black,
+          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
         ),
-        h1: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        h2: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        h3: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        listBullet: const TextStyle(fontSize: 14),
-        code: const TextStyle(
+        h1: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+        h2: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+        h3: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+        listBullet: TextStyle(fontSize: 14, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+        code: TextStyle(
           fontFamily: 'monospace',
-          backgroundColor: Color(0xFFF4F4F4),
+          backgroundColor: isDark ? AppColors.darkCard : const Color(0xFFF4F4F4),
+          color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
         ),
       ),
     );
@@ -384,19 +387,20 @@ class _MessageBubbleState extends State<MessageBubble>
 
 
   void showDownloadOptions() {
+    final isDark = context.isDark;
     Get.bottomSheet(
       Container(
         padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkCard : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.image),
-              title: const Text('Download image only'),
+              leading: Icon(Icons.image, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+              title: Text('Download image only', style: TextStyle(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
               onTap: () {
                 Get.back();
                 downloadImageOnly(
@@ -410,8 +414,8 @@ class _MessageBubbleState extends State<MessageBubble>
               },
             ),
             ListTile(
-              leading: const Icon(Icons.text_fields),
-              title: const Text('Download image with text'),
+              leading: Icon(Icons.text_fields, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+              title: Text('Download image with text', style: TextStyle(color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary)),
               onTap: () {
                 Get.back();
                 downloadImageWithText(
@@ -538,13 +542,14 @@ class _ImageCarouselState extends State<_ImageCarousel> {
 
 
 Widget _shimmerPage() {
+  final isDark = Get.context != null && Get.context!.isDark;
   return Shimmer.fromColors(
-    baseColor: Colors.grey.shade300,
-    highlightColor: Colors.grey.shade100,
+    baseColor: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+    highlightColor: isDark ? Colors.grey.shade600 : Colors.grey.shade100,
     child: Container(
       margin: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.grey.shade800,
+        color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
         borderRadius: BorderRadius.circular(8),
       ),
     ),
@@ -582,6 +587,10 @@ class UserMessageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = context.isDark;
+    final cardColor = isDark ? AppColors.darkCard : Colors.white;
+    final textColor = isDark ? AppColors.darkTextPrimary : Colors.black87;
+    
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -613,7 +622,7 @@ class UserMessageCard extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
@@ -622,11 +631,11 @@ class UserMessageCard extends StatelessWidget {
           ),
         ),
 
-        // 3) White card
+        // 3) Card
         Container(
           margin: const EdgeInsets.only(left: 6),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardColor,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Padding(
@@ -645,8 +654,8 @@ class UserMessageCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 DefaultTextStyle(
-                  style: const TextStyle(
-                    color: Colors.black87,
+                  style: TextStyle(
+                    color: textColor,
                     fontSize: 14,
                     fontFamily: "Poppins",
                     height: 1.4,
@@ -696,6 +705,9 @@ class ResponseMessageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool hasImage = _isImageWidget(content);
+    final isDark = context.isDark;
+    final cardColor = isDark ? AppColors.darkCard : Colors.white;
+    final borderColor = isDark ? AppColors.darkDivider : Colors.black12;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 6),
@@ -710,12 +722,12 @@ class ResponseMessageCard extends StatelessWidget {
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.black12),
+              color: cardColor,
+              border: Border.all(color: borderColor),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.07),
+                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.07),
                   blurRadius: 12,
                   spreadRadius: 1,
                   offset: const Offset(0, 4),
@@ -736,7 +748,7 @@ class ResponseMessageCard extends StatelessWidget {
                         ),
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: labelColor.withOpacity(0.15),
+                          color: labelColor.withOpacity(isDark ? 0.25 : 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
@@ -766,7 +778,7 @@ class ResponseMessageCard extends StatelessWidget {
                         ),
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: labelColor.withOpacity(0.15),
+                          color: labelColor.withOpacity(isDark ? 0.25 : 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Stack(
