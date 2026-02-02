@@ -175,16 +175,38 @@ class CreditController extends GetxController {
   // ==================== ADD CREDITS ====================
 
   /// Add credits after a successful purchase
-  Future<void> addCreditsAfterPurchase(int credits) async {
+  Future<bool> addCreditsAfterPurchase(int credits) async {
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getString('userId');
     
-    if (userId == null) return;
-    
-    final creditDocId = userCredits.value?.id;
-    if (creditDocId == null) return;
+    if (userId == null || userId.isEmpty) {
+      print('[CREDITS] No user ID found');
+      return false;
+    }
     
     try {
+      // Try to get credit doc ID from cache first
+      String? creditDocId = userCredits.value?.id;
+      
+      // If not cached, fetch from Firestore
+      if (creditDocId == null) {
+        print('[CREDITS] Fetching credit doc from Firestore...');
+        final snapshot = await FirebaseFirestore.instance
+            .collection('user_credits')
+            .where('userId', isEqualTo: userId)
+            .limit(1)
+            .get();
+        
+        if (snapshot.docs.isEmpty) {
+          print('[CREDITS] No credit document found, cannot add credits');
+          return false;
+        }
+        
+        creditDocId = snapshot.docs.first.id;
+        // Update cache
+        userCredits.value = FBUserCreditsModel.fromFirestore(snapshot.docs.first);
+      }
+      
       final ref = FirebaseFirestore.instance
           .collection('user_credits')
           .doc(creditDocId);
@@ -195,19 +217,15 @@ class CreditController extends GetxController {
         'updatedAt': FieldValue.serverTimestamp(),
       });
       
-      print('[CREDITS] Added $credits credits');
+      // Refresh the cache
+      await refreshCredits();
       
-      // Show success feedback
-      Get.snackbar(
-        '🎉 Credits Added!',
-        'You received $credits credits',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green.shade600,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
-      );
+      print('[CREDITS] Added $credits credits. New balance: ${userCredits.value?.remainingCredits}');
+      
+      return true;
     } catch (e) {
       print('[CREDITS] Add credits error: $e');
+      return false;
     }
   }
 
@@ -483,22 +501,33 @@ class BuyCreditsBottomSheet extends StatelessWidget {
   }
 
   void _handleRestore(BuildContext context) async {
+    Get.back(); // Close sheet first for better UX
+    
     try {
       // Add 20 credits on restore for testing
       final creditController = Get.find<CreditController>();
-      await creditController.addCreditsAfterPurchase(20);
+      final success = await creditController.addCreditsAfterPurchase(20);
       
-      Get.back(); // Close sheet
-      
-      Get.snackbar(
-        '✅ Restore Complete',
-        'Your 20 credits have been restored!',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green.shade600,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 2),
-      );
+      if (success) {
+        Get.snackbar(
+          '🎉 Restore Complete',
+          'Your 20 credits have been restored! Balance: ${creditController.remainingCredits}',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green.shade600,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 2),
+        );
+      } else {
+        Get.snackbar(
+          'Restore Failed',
+          'Unable to add credits. Please try again.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red.shade600,
+          colorText: Colors.white,
+        );
+      }
     } catch (e) {
+      print('[RESTORE] Error: $e');
       Get.snackbar(
         'Restore Failed',
         'Unable to restore purchases',
