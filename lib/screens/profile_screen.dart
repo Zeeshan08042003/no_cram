@@ -469,7 +469,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
-              // const SizedBox(height: 10),
+              Visibility(
+                  visible: progress != 0,
+                  child: SizedBox(height: 20)),
               // Progress Bar
               Container(
                 height: 10,

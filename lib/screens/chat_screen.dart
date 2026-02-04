@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:nocram/utils/asset_utils.dart';
 import '../controllers/chat_controller.dart';
 import '../services/ai/explain_image_ai_service.dart';
 import '../services/widgets/credit_balance_widget.dart';
@@ -52,8 +53,11 @@ class HomeScreen extends StatelessWidget {
                                       blurRadius: 6)
                                 ],
                               ),
-                              child: Icon(Icons.school,
-                                  color: AppColors.primaryBlue, size: 22),
+                              child:CircleAvatar(
+                                  radius: 14,
+                                  backgroundColor: AppColors.primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
+                                  child:  Image.asset(AssetUtils.LOGO)
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -477,11 +481,7 @@ class HomeScreen extends StatelessWidget {
         ),
         title: Row(
           children: [
-            Icon(
-              Icons.school, 
-              color: AppColors.primaryBlue,
-              size: 24,
-            ),
+            Image.asset(AssetUtils.LOGO,height: 24,width: 24),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

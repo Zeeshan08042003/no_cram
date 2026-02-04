@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../screens/main_screen.dart';
 import '../services/firebase/firestore_service.dart';
+import 'credit_controller.dart';
 
 class AuthController extends GetxController{
   var obscurePassword = true.obs;
@@ -85,7 +86,18 @@ class AuthController extends GetxController{
         name,
       );
 
-
+      // 🔄 Initialize controllers for new user
+      var pref = await SharedPreferences.getInstance();
+      var userId = pref.getString('userId');
+      if (userId != null) {
+        subscriptionController.init(userId);
+        // 💰 Start credit listener for new user
+        try {
+          Get.find<CreditController>().listenToCredits(userId);
+        } catch (e) {
+          print('CreditController not found: $e');
+        }
+      }
 
       // ✅ SUCCESS
       Get.offAll(() => MainScreen());
@@ -98,15 +110,15 @@ class AuthController extends GetxController{
         colorText: Colors.white,
       );
     } catch (e) {
-      // ❌ ERROR
-      print(e.toString());
-      Get.snackbar(
-        'Registration failed',
-        e.toString(),
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.blueAccent,
-        colorText: Colors.white,
-      );
+      if (e is FirebaseAuthException) {
+        _handleAuthError(e);
+      } else {
+        Get.snackbar(
+          'Error',
+          'Something went wrong. Please try again.',
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
     }
     isLoading(false);
   }
@@ -160,6 +172,14 @@ class AuthController extends GetxController{
       var pref = await SharedPreferences.getInstance();
       var userId = pref.getString('userId');
       subscriptionController.init(userId??'');
+      // 💰 Start credit listener for logged in user
+      if (userId != null && userId.isNotEmpty) {
+        try {
+          Get.find<CreditController>().listenToCredits(userId);
+        } catch (e) {
+          print('CreditController not found: $e');
+        }
+      }
 
       // ✅ SUCCESS → clear back stack
       Get.offAll(() => MainScreen());
@@ -245,6 +265,13 @@ class AuthController extends GetxController{
       // 7️⃣ Initialize subscription
       subscriptionController.init(user.uid);
       
+      // 8️⃣ Start credit listener for Google user
+      try {
+        Get.find<CreditController>().listenToCredits(user.uid);
+      } catch (e) {
+        print('CreditController not found: $e');
+      }
+      
       // ✅ SUCCESS → Navigate to main screen
       googleLoading(false);
       Get.offAll(() => MainScreen());
@@ -285,4 +312,45 @@ class AuthController extends GetxController{
       print('❌ Sign out error: $e');
     }
   }
+
+
+  void _handleAuthError(FirebaseAuthException e) {
+    String message;
+
+    switch (e.code) {
+      case 'email-already-in-use':
+        message = 'The email address is already in use by another account.';
+        break;
+
+      case 'invalid-email':
+        message = 'Please enter a valid email address.';
+        break;
+
+      case 'weak-password':
+        message = 'Password is too weak. Use at least 6 characters.';
+        break;
+
+      case 'operation-not-allowed':
+        message = 'Email/password sign-up is disabled.';
+        break;
+
+      case 'network-request-failed':
+        message = 'No internet connection. Please try again.';
+        break;
+
+      default:
+        message = 'Registration failed. Please try again.';
+    }
+
+    Get.snackbar(
+      'Registration Failed',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.redAccent,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+
 }

@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:shimmer/shimmer.dart';
+import '../controllers/theme_controller.dart';
 import '../services/widgets/download_widget.dart';
 import '../utils/app_themes.dart';
 
@@ -223,9 +224,12 @@ class _MessageBubbleState extends State<MessageBubble>
 
     // Single image vs multiple images view
     final imageView = images.length == 1
-        ? images.first
+        ? ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 120),
+            child: images.first,
+          )
         : SizedBox(
-            height: 100,
+            height: 70,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: images.length,
@@ -233,7 +237,7 @@ class _MessageBubbleState extends State<MessageBubble>
                 padding: EdgeInsets.only(right: index < images.length - 1 ? 8 : 0),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(width: 100, height: 100, child: images[index]),
+                  child: SizedBox(width: 70, height: 70, child: images[index]),
                 ),
               ),
             ),
@@ -268,12 +272,14 @@ class _MessageBubbleState extends State<MessageBubble>
 
   Widget _buildTextBubble(BuildContext context,
       {String? label, IconData? icon}) {
+    final themeController = Get.find<ThemeController>();
+    final isDark = themeController.isDarkMode.value;
     return ResponseMessageCard(
       content: _markdown(_visibleText),
       label: label,
       icon: icon,
       isImage: false,
-      labelColor: Colors.black,
+      labelColor: isDark ? AppColors.darkTextPrimary : Colors.black,
     );
   }
 

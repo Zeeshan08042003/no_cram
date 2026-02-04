@@ -250,6 +250,9 @@ class FirestoreService {
       SharedPreferences pref  = await SharedPreferences.getInstance();
       pref.setString('userId', user.uid);
 
+      // 💰 Ensure credits document exists for existing users
+      await createCreditsIfNotExists(user.uid);
+
       if (!doc.exists) {
         throw Exception('User data not found in Firestore');
       }
@@ -301,9 +304,9 @@ class FirestoreService {
       final credits = FBUserCreditsModel(
         id: id,
         userId: userId,
-        totalCreditsEarned: 20,
+        totalCreditsEarned: 10,
         usedCredits: 0,
-        remainingCredits: 20,
+        remainingCredits: 10,
         freeCreditsGranted: true,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),

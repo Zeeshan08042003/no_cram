@@ -20,7 +20,7 @@ class CreditController extends GetxController {
   final RxBool isLoading = false.obs;
   
   /// Stream subscription for real-time credit updates
-  StreamSubscription<DocumentSnapshot>? _creditSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _creditSubscription;
 
   // ==================== GETTERS ====================
   
@@ -70,6 +70,8 @@ class CreditController extends GetxController {
   void listenToCredits(String userId) {
     _creditSubscription?.cancel();
     
+    print('[CREDITS] Starting listener for user: $userId');
+    
     _creditSubscription = FirebaseFirestore.instance
         .collection('user_credits')
         .where('userId', isEqualTo: userId)
@@ -80,12 +82,12 @@ class CreditController extends GetxController {
         userCredits.value = FBUserCreditsModel.fromFirestore(snapshot.docs.first);
         print('[CREDITS] Updated: ${userCredits.value?.remainingCredits} remaining');
       } else {
-        print('[CREDITS] No credit document found for user');
+        print('[CREDITS] No credit document found for user: $userId');
         userCredits.value = null;
       }
     }, onError: (error) {
       print('[CREDITS] Stream error: $error');
-    }) as StreamSubscription<DocumentSnapshot<Object?>>?;
+    });
   }
 
   /// Refresh credits manually (useful after purchase)
@@ -198,8 +200,15 @@ class CreditController extends GetxController {
             .get();
         
         if (snapshot.docs.isEmpty) {
-          print('[CREDITS] No credit document found, cannot add credits');
-          return false;
+          // 🆕 Create credit document if it doesn't exist
+          print('[CREDITS] No credit document found, creating one...');
+          creditDocId = await _createCreditDocument(userId, credits);
+          if (creditDocId == null) {
+            return false;
+          }
+          // Start listening to the new document
+          listenToCredits(userId);
+          return true;
         }
         
         creditDocId = snapshot.docs.first.id;
@@ -226,6 +235,29 @@ class CreditController extends GetxController {
     } catch (e) {
       print('[CREDITS] Add credits error: $e');
       return false;
+    }
+  }
+
+  /// Create a new credit document for a user
+  Future<String?> _createCreditDocument(String userId, int initialCredits) async {
+    try {
+      final docRef = FirebaseFirestore.instance.collection('user_credits').doc();
+      
+      await docRef.set({
+        'userId': userId,
+        'totalCreditsEarned': initialCredits,
+        'remainingCredits': initialCredits,
+        'usedCredits': 0,
+        'freeCreditsGranted': false, // This is a purchased credit
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      
+      print('[CREDITS] Created new credit document: ${docRef.id}');
+      return docRef.id;
+    } catch (e) {
+      print('[CREDITS] Error creating credit document: $e');
+      return null;
     }
   }
 

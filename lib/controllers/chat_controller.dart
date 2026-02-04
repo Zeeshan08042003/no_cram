@@ -82,9 +82,9 @@ class ChatController extends GetxController {
   var imageServices = ImageAIService();
   var storyTellingServices = StoryTellingServices();
   var explainImageServices = ExplainImageAiService();
-  final selectedMode = ChatMode.defaultMode.obs;
+  final selectedMode = ChatMode.illustration.obs;
   /// Display mode for header - shows the original/first mode selected (doesn't change after generation)
-  final displayMode = ChatMode.defaultMode.obs;
+  final displayMode = ChatMode.illustration.obs;
   var showAttachmentPanel = false.obs;
   /// Multiple images support - list of image bytes
   final RxList<Uint8List> selectedImageBytesList = <Uint8List>[].obs;
@@ -168,14 +168,14 @@ class ChatController extends GetxController {
 
   /// UI calls this when a chip is tapped
   changeMode(ChatMode mode) async {
+    // If same mode is tapped, do nothing (no deselect)
     if (selectedMode.value == mode) {
-      // Toggle off
-      selectedMode.value = ChatMode.defaultMode;
-      clearImages();
-      print("🔄 Mode cleared (no mode selected)");
       return;
     }
 
+    // Clear images when switching modes
+    clearImages();
+    
     selectedMode.value = mode;
     print("🎯 Mode selected: ${mode.label}");
 
@@ -250,13 +250,20 @@ class ChatController extends GetxController {
       return;
     }
 
+    // Check if this is illustration mode with reference images
+    final hasReferenceImages = selectedImageBytesList.isNotEmpty;
+    final isIllustrationWithImages = mode == ChatMode.illustration && hasReferenceImages;
+
     // Add user message to chat history (chat screen)
-    messages.add(
-      FBChatItem.user(
-        prompt: text,
-        mode: mode.key,
-      ),
-    );
+    // Skip for illustration with images - the service will add it with image data
+    if (!isIllustrationWithImages) {
+      messages.add(
+        FBChatItem.user(
+          prompt: text,
+          mode: mode.key,
+        ),
+      );
+    }
     textController.clear();
     scrollToBottom();
 
@@ -264,7 +271,7 @@ class ChatController extends GetxController {
     Get.to(() => ResultScreen.generation());
 
     if (mode == ChatMode.illustration) {
-      print("✨ Illustration mode started");
+      print("✨ Illustration mode started${hasReferenceImages ? ' with reference images' : ''}");
       await imageServices.handleIllustrationPrompt(text);
     } else if (mode == ChatMode.storyTelling) {
       print("📖 Story telling mode started");
@@ -318,8 +325,8 @@ class ChatController extends GetxController {
 
   clearMessage() {
     messages.clear();
-    selectedMode.value = ChatMode.defaultMode;
-    displayMode.value = ChatMode.defaultMode;
+    selectedMode.value = ChatMode.illustration;
+    displayMode.value = ChatMode.illustration;
     clearImages();
     isGenerating(false); // Reset generating state
     currentConversationId.value = null; // Start a new conversation

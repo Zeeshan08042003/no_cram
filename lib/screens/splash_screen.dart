@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:nocram/utils/asset_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../controllers/credit_controller.dart';
@@ -76,16 +77,19 @@ class _SplashscreenState extends State<Splashscreen> {
               children: [
                 // App Logo/Icon
                 Container(
+                  height: 100,
+                  width: 100,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: AppColors.primaryBlue.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    Icons.school,
-                    size: 60,
-                    color: AppColors.primaryBlue,
-                  ),
+                  child: Image.asset(AssetUtils.LOGO)
+                  // Icon(
+                  //   Icons.school,
+                  //   size: 60,
+                  //   color: AppColors.primaryBlue,
+                  // ),
                 ),
                 const SizedBox(height: 24),
                 // App Name
@@ -111,16 +115,16 @@ class _SplashscreenState extends State<Splashscreen> {
                 ),
                 const SizedBox(height: 40),
                 // Loading indicator
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      AppColors.primaryBlue,
-                    ),
-                  ),
-                ),
+                // SizedBox(
+                //   width: 24,
+                //   height: 24,
+                //   child: CircularProgressIndicator(
+                //     strokeWidth: 2.5,
+                //     valueColor: AlwaysStoppedAnimation<Color>(
+                //       AppColors.primaryBlue,
+                //     ),
+                //   ),
+                // ),
               ],
             ),
           ),

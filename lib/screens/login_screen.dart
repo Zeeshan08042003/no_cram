@@ -4,6 +4,7 @@ import '../controllers/auth_controller.dart';
 import '../controllers/theme_controller.dart';
 import '../screens/signup_screen.dart';
 import '../utils/app_themes.dart';
+import '../utils/asset_utils.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,22 +35,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Logo Container
                 Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkCard : Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(Icons.school,
-                        size: 50, color: AppColors.primaryBlue),
+                  child:  CircleAvatar(
+                      radius: 40,
+                      backgroundColor: AppColors.primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
+                      child:  Image.asset(AssetUtils.LOGO)
                   ),
+                  // Container(
+                  //   padding: const EdgeInsets.all(16),
+                  //   decoration: BoxDecoration(
+                  //     color: isDark ? AppColors.darkCard : Colors.white,
+                  //     borderRadius: BorderRadius.circular(20),
+                  //     boxShadow: [
+                  //       BoxShadow(
+                  //         color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                  //         blurRadius: 10,
+                  //         offset: const Offset(0, 4),
+                  //       ),
+                  //     ],
+                  //   ),
+                  //   child: Image.asset(AssetUtils.LOGO,height: 40,width: 50,),
+                  // ),
                 ),
 
                 const SizedBox(height: 40),
@@ -128,30 +133,35 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 24),
 
                 // Log In Button
-                Obx(() => SizedBox(
+                SizedBox(
                   width: double.infinity,
                   height: 60,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      controller.loginLoading.value
-                          ? null
-                          : await controller.loginUser();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryBlue,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15)),
-                      elevation: 0,
+                  child: Obx(()=>
+                    ElevatedButton(
+                      onPressed: () async {
+                        controller.loginLoading.value
+                            ? null
+                            : await controller.loginUser();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15)),
+                        elevation: 0,
+                      ),
+                      child: controller.loginLoading.value
+                          ? SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(color: Colors.white))
+                          : const Text("Log In",
+                              style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold)),
                     ),
-                    child: controller.isLoading.value
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("Log In",
-                            style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
                   ),
-                )),
+                ),
 
                 const SizedBox(height: 30),
 

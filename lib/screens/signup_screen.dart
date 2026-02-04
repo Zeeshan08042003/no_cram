@@ -4,6 +4,7 @@ import '../screens/login_screen.dart';
 import '../controllers/auth_controller.dart';
 import '../controllers/theme_controller.dart';
 import '../utils/app_themes.dart';
+import '../utils/asset_utils.dart';
 
 class SignUpScreen extends StatelessWidget {
   SignUpScreen({super.key});
@@ -46,8 +47,7 @@ class SignUpScreen extends StatelessWidget {
                 CircleAvatar(
                   radius: 40,
                   backgroundColor: AppColors.primaryBlue.withOpacity(isDark ? 0.2 : 0.1),
-                  child: const Icon(Icons.school,
-                      size: 40, color: AppColors.primaryBlue),
+                  child:  Image.asset(AssetUtils.LOGO)
                 ),
 
                 const SizedBox(height: 30),
@@ -140,7 +140,10 @@ class SignUpScreen extends StatelessWidget {
                       elevation: 4,
                     ),
                     child: controller.isLoading.value
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(color: Colors.white,))
                         : const Text(
                       "Sign Up",
                       style: TextStyle(fontSize: 18, color: Colors.white),
