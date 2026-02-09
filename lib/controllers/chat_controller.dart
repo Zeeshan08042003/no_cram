@@ -218,7 +218,7 @@ class ChatController extends GetxController {
 
     // 🔒 INSTANT CREDIT CHECK - Uses cached controller, no lookup overhead
     if (_creditController != null && !_creditController!.canSearch) {
-      _creditController!.showBuyCreditsSheet();
+      _creditController!.showCreditsExhaustedSheet();
       return;
     }
 

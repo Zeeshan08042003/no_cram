@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/fb_user_credit_model.dart';
-import 'subscription_controller.dart';
 
 /// Controller for managing user credits
 /// Handles real-time credit balance, consumption, and insufficient credit states
@@ -263,132 +262,17 @@ class CreditController extends GetxController {
 
   // ==================== UI DIALOGS ====================
 
-  /// Show insufficient credits dialog with option to buy
+  /// Show insufficient credits bottom sheet with option to buy
   void _showInsufficientCreditsDialog() {
-    Get.dialog(
-      AlertDialog(
-        backgroundColor: const Color(0xFF1E1E2E),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.token_outlined,
-                color: Colors.orange,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Text(
-                'Out of Credits',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'You need credits to continue searching.',
-              style: TextStyle(
-                color: Colors.grey.shade300,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.purple.withOpacity(0.2),
-                    Colors.blue.withOpacity(0.2),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.purple.withOpacity(0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.local_offer,
-                    color: Colors.purple,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '20 Credits',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          'Only \$0.99',
-                          style: TextStyle(
-                            color: Colors.grey.shade400,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: Text(
-              'Later',
-              style: TextStyle(
-                color: Colors.grey.shade400,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Get.back();
-              showBuyCreditsSheet();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purple,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 12,
-              ),
-            ),
-            child: const Text('Buy Credits'),
-          ),
-        ],
-      ),
-      barrierDismissible: true,
+    showCreditsExhaustedSheet();
+  }
+  
+  /// Show credits exhausted bottom sheet - called when user tries to submit with no credits
+  void showCreditsExhaustedSheet() {
+    Get.bottomSheet(
+      const CreditsExhaustedBottomSheet(),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
     );
   }
 
@@ -444,7 +328,7 @@ class BuyCreditsBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '1 credit = 1 search',
+            '1 credit = 1 question',
             style: TextStyle(
               color: Colors.grey.shade400,
               fontSize: 14,
@@ -457,7 +341,7 @@ class BuyCreditsBottomSheet extends StatelessWidget {
           _CreditPackageCard(
             credits: 20,
             price: '\$0.99',
-            onTap: () => _handlePurchase(context),
+            onTap: () => _showComingSoon(context),
           ),
           
           const SizedBox(height: 24),
@@ -493,81 +377,244 @@ class BuyCreditsBottomSheet extends StatelessWidget {
             },
           ),
           
-          const SizedBox(height: 16),
-          
-          // Restore purchases
-          TextButton(
-            onPressed: () => _handleRestore(context),
-            child: Text(
-              'Restore Purchases',
-              style: TextStyle(
-                color: Colors.grey.shade400,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          
           SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
         ],
       ),
     );
   }
 
-  void _handlePurchase(BuildContext context) async {
+  void _showComingSoon(BuildContext context) {
     Get.back(); // Close sheet
     
-    // Get SubscriptionController and trigger purchase
-    try {
-      final subscriptionController = Get.find<SubscriptionController>();
-      await subscriptionController.purchaseCredits();
-    } catch (e) {
-      print('[PURCHASE] Error: $e');
-      Get.snackbar(
-        'Purchase Failed',
-        'Unable to complete purchase. Please try again.',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.shade600,
-        colorText: Colors.white,
-      );
-    }
+    Get.snackbar(
+      '🚀 Coming Soon!',
+      'In-app purchases will be available soon. Stay tuned!',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.purple.shade600,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
+      icon: const Icon(Icons.rocket_launch, color: Colors.white),
+    );
   }
+}
 
-  void _handleRestore(BuildContext context) async {
-    Get.back(); // Close sheet first for better UX
+// ==================== CREDITS EXHAUSTED BOTTOM SHEET ====================
+
+/// Bottom sheet shown when user tries to submit a question but has no credits
+class CreditsExhaustedBottomSheet extends StatelessWidget {
+  const CreditsExhaustedBottomSheet({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1E1E2E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade600,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Icon and Title
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.token_outlined,
+              color: Colors.orange,
+              size: 48,
+            ),
+          ),
+          const SizedBox(height: 20),
+          
+          const Text(
+            'Out of Credits!',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'You\'ve used all your credits. Each question requires 1 credit to process.',
+            style: TextStyle(
+              color: Colors.grey.shade400,
+              fontSize: 14,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 28),
+          
+          // Credits summary
+          GetX<CreditController>(
+            builder: (controller) {
+              final total = controller.totalCreditsEarned;
+              final used = controller.usedCredits;
+              
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.purple.withOpacity(0.2),
+                      Colors.blue.withOpacity(0.2),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.purple.withOpacity(0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildCreditStat('Total Earned', total, Colors.blue),
+                    Container(
+                      width: 1,
+                      height: 40,
+                      color: Colors.grey.shade700,
+                    ),
+                    _buildCreditStat('Used', used, Colors.orange),
+                    Container(
+                      width: 1,
+                      height: 40,
+                      color: Colors.grey.shade700,
+                    ),
+                    _buildCreditStat('Remaining', 0, Colors.red),
+                  ],
+                ),
+              );
+            },
+          ),
+          
+          const SizedBox(height: 28),
+          
+          // Buy Credits Button
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.purple.shade600,
+                  Colors.blue.shade600,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.purple.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ElevatedButton(
+              onPressed: () => _handleBuyCredits(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shopping_cart, color: Colors.white, size: 20),
+                  SizedBox(width: 10),
+                  Text(
+                    'Buy More Credits',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 12),
+          
+          // Maybe Later Button
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'Maybe Later',
+              style: TextStyle(
+                color: Colors.grey.shade500,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          
+          SizedBox(height: MediaQuery.of(context).padding.bottom + 8),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildCreditStat(String label, int value, Color color) {
+    return Column(
+      children: [
+        Text(
+          '$value',
+          style: TextStyle(
+            color: color,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+  
+  void _handleBuyCredits() {
+    Get.back(); // Close this sheet
     
-    try {
-      // Add 20 credits on restore for testing
-      final creditController = Get.find<CreditController>();
-      final success = await creditController.addCreditsAfterPurchase(20);
-      
-      if (success) {
-        Get.snackbar(
-          '🎉 Restore Complete',
-          'Your 20 credits have been restored! Balance: ${creditController.remainingCredits}',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green.shade600,
-          colorText: Colors.white,
-          duration: const Duration(seconds: 2),
-        );
-      } else {
-        Get.snackbar(
-          'Restore Failed',
-          'Unable to add credits. Please try again.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red.shade600,
-          colorText: Colors.white,
-        );
-      }
-    } catch (e) {
-      print('[RESTORE] Error: $e');
-      Get.snackbar(
-        'Restore Failed',
-        'Unable to restore purchases',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red.shade600,
-        colorText: Colors.white,
-      );
-    }
+    // Show "Coming Soon" snackbar
+    Get.snackbar(
+      '🚀 Coming Soon!',
+      'In-app purchases will be available soon. Stay tuned!',
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.purple.shade600,
+      colorText: Colors.white,
+      duration: const Duration(seconds: 3),
+      margin: const EdgeInsets.all(16),
+      borderRadius: 12,
+      icon: const Icon(Icons.rocket_launch, color: Colors.white),
+    );
   }
 }
 
@@ -660,3 +707,4 @@ class _CreditPackageCard extends StatelessWidget {
     );
   }
 }
+

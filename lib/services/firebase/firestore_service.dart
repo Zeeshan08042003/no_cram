@@ -304,9 +304,9 @@ class FirestoreService {
       final credits = FBUserCreditsModel(
         id: id,
         userId: userId,
-        totalCreditsEarned: 10,
+        totalCreditsEarned: 20,
         usedCredits: 0,
-        remainingCredits: 10,
+        remainingCredits: 20,
         freeCreditsGranted: true,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),

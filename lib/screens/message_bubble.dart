@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'dart:typed_data';
 import '../controllers/chat_controller.dart';
 import 'dart:async';
@@ -25,6 +26,9 @@ class MessageBubble extends StatefulWidget {
   final List<Uint8List>? imageBytesList;
   final List<String>? imageUrlList;
   final bool animate;
+  final String? searchQuery; // Search query for highlighting
+  final int? currentMatchIndex; // The global index of the currently selected match
+  final int? startingMatchIndex; // The global match index where this bubble's matches start
 
   const MessageBubble({
     super.key,
@@ -37,6 +41,9 @@ class MessageBubble extends StatefulWidget {
     this.imageUrlList,
     this.explainText,
     this.animate = false,
+    this.searchQuery,
+    this.currentMatchIndex,
+    this.startingMatchIndex,
   });
 
   @override
@@ -75,6 +82,37 @@ class _MessageBubbleState extends State<MessageBubble>
 
   Widget _markdown(String text) {
     final isDark = Get.context != null && Get.context!.isDark;
+    final query = widget.searchQuery?.toLowerCase() ?? '';
+    
+    // If there's a search query, use custom text builder for highlighting
+    if (query.isNotEmpty) {
+      return MarkdownBody(
+        data: text,
+        selectable: true,
+        styleSheet: MarkdownStyleSheet(
+          p: TextStyle(
+            fontSize: 14,
+            height: 1.45,
+            fontWeight: FontWeight.w600,
+            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+          ),
+          h1: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+          h2: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+          h3: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+          listBullet: TextStyle(fontSize: 14, color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+          code: TextStyle(
+            fontFamily: 'monospace',
+            backgroundColor: isDark ? AppColors.darkCard : const Color(0xFFF4F4F4),
+            color: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+          ),
+        ),
+        builders: {
+          'p': _HighlightTextBuilder(query, isDark, widget.currentMatchIndex, widget.startingMatchIndex),
+          'li': _HighlightTextBuilder(query, isDark, widget.currentMatchIndex, widget.startingMatchIndex),
+        },
+      );
+    }
+    
     return MarkdownBody(
       data: text,
       selectable: true,
@@ -142,6 +180,80 @@ class _MessageBubbleState extends State<MessageBubble>
     _typingTimer?.cancel();
     super.dispose();
   }
+  
+  // ───────────────── SEARCH HIGHLIGHT HELPER ─────────────────
+  
+  /// Builds a RichText widget with highlighted search matches
+  Widget _buildHighlightedText(String text, {TextStyle? style}) {
+    final query = widget.searchQuery?.toLowerCase() ?? '';
+    
+    // If no search query, return normal text
+    if (query.isEmpty) {
+      return SelectableText(
+        text,
+        style: style ?? const TextStyle(fontSize: 14),
+      );
+    }
+    
+    
+    final textLower = text.toLowerCase();
+    final spans = <TextSpan>[];
+    int start = 0;
+    int localMatchCount = 0;
+    
+    while (true) {
+      final index = textLower.indexOf(query, start);
+      if (index == -1) {
+        // Add remaining text
+        if (start < text.length) {
+          spans.add(TextSpan(
+            text: text.substring(start),
+            style: style,
+          ));
+        }
+        break;
+      }
+      
+      // Add text before match
+      if (index > start) {
+        spans.add(TextSpan(
+          text: text.substring(start, index),
+          style: style,
+        ));
+      }
+      
+      // Check if this match is the currently selected one
+      bool isActiveMatch = false;
+      if (widget.currentMatchIndex != null && widget.startingMatchIndex != null) {
+        final globalIndexOfContext = widget.startingMatchIndex! + localMatchCount;
+        isActiveMatch = globalIndexOfContext == widget.currentMatchIndex;
+      }
+      
+      // Add highlighted match (Orange for active, Yellow for others)
+      spans.add(TextSpan(
+        text: text.substring(index, index + query.length),
+        style: (style ?? const TextStyle()).copyWith(
+          backgroundColor: isActiveMatch 
+              ? Colors.orange.withOpacity(0.9) 
+              : Colors.yellow.withOpacity(0.7),
+          color: Colors.black,
+          fontWeight: FontWeight.w800,
+        ),
+      ));
+      
+      start = index + query.length;
+      localMatchCount++;
+    }
+    
+    if (spans.isEmpty) {
+      return SelectableText(text, style: style);
+    }
+    
+    return SelectableText.rich(
+      TextSpan(children: spans),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -185,8 +297,7 @@ class _MessageBubbleState extends State<MessageBubble>
 
   Widget _buildUserBubble(BuildContext context) {
     return UserMessageCard(
-      content: SelectableText(widget.text,
-          style: const TextStyle(fontSize: 14)),
+      content: _buildHighlightedText(widget.text, style: const TextStyle(fontSize: 14)),
       accentLabel: 'YOU ASKED',
       accentColor: const Color(0xFF1A73E8),
     );
@@ -253,8 +364,7 @@ class _MessageBubbleState extends State<MessageBubble>
           ),
           if (widget.text.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
-            SelectableText(widget.text,
-                style: const TextStyle(fontSize: 14)),
+            _buildHighlightedText(widget.text, style: const TextStyle(fontSize: 14)),
           ]
         ],
       ),
@@ -920,3 +1030,67 @@ class ResponseMessageCard extends StatelessWidget {
 //     this.aiImageBytes,
 //   });
 // }
+
+// ───────────────── HIGHLIGHT TEXT BUILDER FOR MARKDOWN ─────────────────
+
+/// Custom markdown element builder that highlights search matches
+class _HighlightTextBuilder extends MarkdownElementBuilder {
+  final String query;
+  final bool isDark;
+  final int? currentMatchIndex;
+  
+  // Tracks match index across multiple text nodes in the markdown
+  int _matchIndexCounter;
+  
+  _HighlightTextBuilder(this.query, this.isDark, this.currentMatchIndex, int? startingMatchIndex)
+      : _matchIndexCounter = startingMatchIndex ?? 0;
+  
+  @override
+  Widget? visitText(md.Text text, TextStyle? preferredStyle) {
+    final content = text.text;
+    if (query.isEmpty) {
+      return Text(content, style: preferredStyle);
+    }
+    
+    final textLower = content.toLowerCase();
+    final spans = <TextSpan>[];
+    int start = 0;
+    
+    while (true) {
+      final index = textLower.indexOf(query, start);
+      if (index == -1) {
+        if (start < content.length) {
+          spans.add(TextSpan(text: content.substring(start), style: preferredStyle));
+        }
+        break;
+      }
+      
+      if (index > start) {
+        spans.add(TextSpan(text: content.substring(start, index), style: preferredStyle));
+      }
+      
+      // Determine if this specific match instance is the active one
+      final bool isActive = currentMatchIndex != null && _matchIndexCounter == currentMatchIndex;
+      
+      spans.add(TextSpan(
+        text: content.substring(index, index + query.length),
+        style: (preferredStyle ?? const TextStyle()).copyWith(
+          backgroundColor: isActive 
+              ? Colors.orange.withOpacity(0.9) 
+              : Colors.yellow.withOpacity(0.7),
+          color: Colors.black,
+          fontWeight: FontWeight.w800,
+        ),
+      ));
+      
+      start = index + query.length;
+      _matchIndexCounter++; // Increment global counter for this message
+    }
+    
+    if (spans.isEmpty) {
+      return Text(content, style: preferredStyle);
+    }
+    
+    return RichText(text: TextSpan(children: spans));
+  }
+}

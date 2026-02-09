@@ -59,6 +59,17 @@ class _ResultScreenState extends State<ResultScreen> {
   
   /// Show input field for conversation mode and history mode (for follow-ups)
   bool get showInputField => isConversationMode || isHistoryMode;
+  
+  // ==================== SEARCH STATE ====================
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  bool _isSearching = false;
+  String _searchQuery = '';
+  int _currentMatchIndex = 0;
+  int _totalMatches = 0;
+  
+  /// GlobalKeys for each message to enable scrolling to specific messages
+  final Map<int, GlobalKey> _messageKeys = {};
 
   @override
   void initState() {
@@ -83,11 +94,165 @@ class _ResultScreenState extends State<ResultScreen> {
 
   @override
   void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     // Defer clearMessage to avoid modifying observables while widget tree is locked
     WidgetsBinding.instance.addPostFrameCallback((_) {
       controller.clearMessage();
     });
     super.dispose();
+  }
+  
+  // ==================== SEARCH METHODS ====================
+  
+  /// List of (messageIndex, matchCount) for each message that has matches
+  List<_MessageMatchInfo> _matchInfoList = [];
+  
+  void _toggleSearch() {
+    setState(() {
+      _isSearching = !_isSearching;
+      if (!_isSearching) {
+        _searchQuery = '';
+        _searchController.clear();
+        _currentMatchIndex = 0;
+        _totalMatches = 0;
+        _matchInfoList = [];
+      } else {
+        // Focus on search field when opening
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _searchFocusNode.requestFocus();
+        });
+      }
+    });
+  }
+  
+  void _updateSearchQuery(String query) {
+    setState(() {
+      _searchQuery = query.toLowerCase();
+      _currentMatchIndex = 0;
+      _countMatches();
+    });
+    
+    // Scroll to first match if found
+    if (_totalMatches > 0) {
+      _scrollToCurrentMatch();
+    }
+  }
+  
+  void _countMatches() {
+    if (_searchQuery.isEmpty) {
+      _totalMatches = 0;
+      _matchInfoList = [];
+      return;
+    }
+    
+    _matchInfoList = [];
+    int totalCount = 0;
+    
+    for (int i = 0; i < controller.messages.length; i++) {
+      final text = controller.messages[i].displayText.toLowerCase();
+      final matchCount = _countOccurrences(text, _searchQuery);
+      if (matchCount > 0) {
+        _matchInfoList.add(_MessageMatchInfo(
+          messageIndex: i,
+          matchCount: matchCount,
+          startMatchIndex: totalCount,
+        ));
+        totalCount += matchCount;
+      }
+    }
+    _totalMatches = totalCount;
+  }
+  
+  int _countOccurrences(String text, String pattern) {
+    if (pattern.isEmpty) return 0;
+    int count = 0;
+    int index = 0;
+    while ((index = text.indexOf(pattern, index)) != -1) {
+      count++;
+      index += pattern.length;
+    }
+    return count;
+  }
+  
+  /// Find which message contains the current match index
+  int _getMessageIndexForCurrentMatch() {
+    if (_matchInfoList.isEmpty) return 0;
+    
+    for (final info in _matchInfoList) {
+      if (_currentMatchIndex >= info.startMatchIndex &&
+          _currentMatchIndex < info.startMatchIndex + info.matchCount) {
+        return info.messageIndex;
+      }
+    }
+    return _matchInfoList.first.messageIndex;
+  }
+  
+  /// Scroll to the message containing the current match
+  void _scrollToCurrentMatch() {
+    if (_matchInfoList.isEmpty) return;
+    
+    final messageIndex = _getMessageIndexForCurrentMatch();
+    
+    // Get the GlobalKey for this message
+    final key = _messageKeys[messageIndex];
+    
+    // CASE 1: Widget is already rendered (key.currentContext is not null)
+    if (key != null && key.currentContext != null) {
+      Scrollable.ensureVisible(
+        key.currentContext!,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.5, // Center the message
+      );
+      return;
+    }
+    
+    // CASE 2: Widget is not rendered (off-screen)
+    // We must manually scroll near it first to trigger a build
+    if (controller.scrollController.hasClients) {
+      // Estimate offset: index * rough item height
+      // Using a safer estimate to avoid overscrolling past the list end
+      final estimatedOffset = (messageIndex * 150.0)
+          .clamp(0.0, controller.scrollController.position.maxScrollExtent);
+          
+      controller.scrollController.animateTo(
+        estimatedOffset,
+        duration: const Duration(milliseconds: 100), // Fast jump
+        curve: Curves.easeOut,
+      ).then((_) {
+        // After scrolling near, wait a bit for build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          // Try ensuring visible again
+          if (key != null && key.currentContext != null) {
+            Scrollable.ensureVisible(
+              key.currentContext!,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              alignment: 0.5,
+            );
+          }
+        });
+      });
+    }
+  }
+  
+  void _nextMatch() {
+    if (_totalMatches > 0) {
+      setState(() {
+        _currentMatchIndex = (_currentMatchIndex + 1) % _totalMatches;
+      });
+      _scrollToCurrentMatch();
+    }
+  }
+  
+  void _previousMatch() {
+    if (_totalMatches > 0) {
+      setState(() {
+        _currentMatchIndex = (_currentMatchIndex - 1 + _totalMatches) % _totalMatches;
+      });
+      _scrollToCurrentMatch();
+    }
   }
 
 
@@ -381,7 +546,6 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-
   Widget _buildHeader(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
@@ -390,36 +554,151 @@ class _ResultScreenState extends State<ResultScreen> {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            GestureDetector(
-              onTap: () => Get.back(),
-              child: Icon(Icons.arrow_back_ios, color: context.textPrimary),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Obx(
-                  () => Text(
-                    "${controller.displayMode.value.label.capitalizeFirst} Mode",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: context.textPrimary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                _buildStatusText(context),
-              ],
-            ),
-            Icon(Icons.more_vert, color: context.textPrimary),
-          ],
-        ),
+        child: _isSearching ? _buildSearchBar(context) : _buildNormalHeader(context),
       ),
     );
   }
+  
+  Widget _buildNormalHeader(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        GestureDetector(
+          onTap: () => Get.back(),
+          child: Icon(Icons.arrow_back_ios, color: context.textPrimary),
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Obx(
+              () => Text(
+                "${controller.displayMode.value.label.capitalizeFirst} Mode",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: context.textPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            _buildStatusText(context),
+          ],
+        ),
+        // Search button only (removed menu button)
+        GestureDetector(
+          onTap: _toggleSearch,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            child: Icon(Icons.search, color: context.textPrimary, size: 24),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildSearchBar(BuildContext context) {
+    final isDark = context.isDark;
+    
+    return Row(
+      children: [
+        // Back/Close button
+        GestureDetector(
+          onTap: _toggleSearch,
+          child: Icon(Icons.arrow_back_ios, color: context.textPrimary, size: 22),
+        ),
+        const SizedBox(width: 12),
+        
+        // Search input field
+        Expanded(
+          child: Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurface : Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              onChanged: _updateSearchQuery,
+              style: TextStyle(
+                color: context.textPrimary,
+                fontSize: 14,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Search in conversation...',
+                hintStyle: TextStyle(
+                  color: context.textTertiary,
+                  fontSize: 14,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: context.textTertiary,
+                  size: 20,
+                ),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? GestureDetector(
+                        onTap: () {
+                          _searchController.clear();
+                          _updateSearchQuery('');
+                        },
+                        child: Icon(
+                          Icons.close,
+                          color: context.textTertiary,
+                          size: 18,
+                        ),
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+            ),
+          ),
+        ),
+        
+        // Match count and navigation
+        if (_searchQuery.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          Text(
+            _totalMatches > 0 
+                ? '${_currentMatchIndex + 1}/$_totalMatches'
+                : '0/0',
+            style: TextStyle(
+              color: context.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: _previousMatch,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                Icons.keyboard_arrow_up,
+                color: _totalMatches > 0 ? context.textPrimary : context.textTertiary,
+                size: 22,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: _nextMatch,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              child: Icon(
+                Icons.keyboard_arrow_down,
+                color: _totalMatches > 0 ? context.textPrimary : context.textTertiary,
+                size: 22,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
 
   Widget _buildStatusText(BuildContext context) {
     return Obx(
@@ -459,17 +738,48 @@ class _ResultScreenState extends State<ResultScreen> {
           // Convert string mode to ChatMode enum
           final chatMode = ChatModeX.fromString(m.mode);
           
-          return MessageBubble(
-            text: m.displayText,
-            isUser: m.isUserMessage,
-            mode: chatMode,
-            imageBytesList: m.displayImageBytes,
-            imageUrlList: m.displayImageUrls,
-            animate: animate,
-            explainText: m.isUserMessage ? null : m.aiOutput?.text,
+          // Create or get GlobalKey for this message (for search scrolling)
+          _messageKeys[index] ??= GlobalKey();
+          
+          // Find match info for this message to support internal highlighting logic
+          int? startingMatchIndex;
+          try {
+            final info = _matchInfoList.firstWhere((info) => info.messageIndex == index);
+            startingMatchIndex = info.startMatchIndex;
+          } catch (_) {}
+          
+          return Container(
+            key: _messageKeys[index],
+            child: MessageBubble(
+              text: m.displayText,
+              isUser: m.isUserMessage,
+              mode: chatMode,
+              imageBytesList: m.displayImageBytes,
+              imageUrlList: m.displayImageUrls,
+              animate: animate,
+              explainText: m.isUserMessage ? null : m.aiOutput?.text,
+              searchQuery: _searchQuery,
+              currentMatchIndex: _currentMatchIndex,
+              startingMatchIndex: startingMatchIndex,
+            ),
           );
         },
       );
     });
   }
+}
+
+// ==================== SEARCH HELPER CLASS ====================
+
+/// Helper class to track match information per message
+class _MessageMatchInfo {
+  final int messageIndex;
+  final int matchCount;
+  final int startMatchIndex; // Global match index where this message's matches start
+  
+  const _MessageMatchInfo({
+    required this.messageIndex,
+    required this.matchCount,
+    required this.startMatchIndex,
+  });
 }
