@@ -1,40 +1,47 @@
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../controllers/chat_controller.dart';
+import '../../controllers/credit_controller.dart';
 import '../../models/chat_mode.dart';
 import '../firebase/firebase_config.dart';
 import '../firebase/firestore_service.dart';
 
 class TextAIService {
+  /// Cached model instance — created once per session
+  GenerativeModel? _cachedModel;
+
+  GenerativeModel _getModel(String modelName) {
+    _cachedModel ??= FirebaseAI.googleAI().generativeModel(
+      model: modelName,
+      systemInstruction: Content.system(
+        'You are an expert study assistant for high school and college students.\n'
+        'When answering a question:\n'
+        '1. Open with one clear sentence summarising the answer.\n'
+        '2. Use simple English — define any technical term immediately after using it.\n'
+        '3. For multi-part topics, use a short numbered list or 2–3 bullet points.\n'
+        '4. Give one concrete real-world example or analogy to make the idea stick.\n'
+        '5. Keep your total answer under 200 words unless the student asks for more detail.\n'
+        'Do not repeat the student\'s question. Do not add filler phrases like "Great question!".',
+      ),
+    );
+    return _cachedModel!;
+  }
 
   /// Build conversation context for follow-up questions
-  /// Returns a formatted string with previous Q&A pairs and follow-up instructions
   String _buildFollowUpContext(ChatController controller, String currentQuestion) {
     final previousMessages = controller.messages;
-    
+
     if (previousMessages.isEmpty) {
       return currentQuestion;
     }
 
     final StringBuffer context = StringBuffer();
-    
-    // Add follow-up instructions
-    context.writeln('''
-=== FOLLOW-UP CONTEXT ===
-This is a follow-up question in an ongoing conversation.
-IMPORTANT INSTRUCTIONS:
-1. Continue from your previous answer - do not start from scratch
-2. Do NOT repeat basic explanations already given
-3. Go deeper into the topic or move in the direction implied by the user's question
-4. Build upon what was already explained
-5. If the user asks about a new aspect, connect it to the previous context
-6. Be concise but thorough - avoid redundancy
 
-=== CONVERSATION HISTORY ===
-''');
+    context.writeln('=== FOLLOW-UP CONTEXT ===');
+    context.writeln('This is a follow-up question in an ongoing conversation.');
+    context.writeln('IMPORTANT: Continue from your previous answer. Do NOT repeat what was already explained.');
+    context.writeln('=== CONVERSATION HISTORY ===');
 
-    // Add previous Q&A pairs
     for (int i = 0; i < previousMessages.length; i++) {
       final msg = previousMessages[i];
       if (msg.isUserMessage) {
@@ -42,8 +49,8 @@ IMPORTANT INSTRUCTIONS:
       } else {
         // Truncate long AI responses to avoid token limits
         final aiText = msg.aiOutput?.text ?? '';
-        final truncatedText = aiText.length > 500 
-            ? '${aiText.substring(0, 500)}...[truncated]' 
+        final truncatedText = aiText.length > 400
+            ? '${aiText.substring(0, 400)}...[truncated]'
             : aiText;
         context.writeln('ASSISTANT: $truncatedText');
       }
@@ -52,113 +59,81 @@ IMPORTANT INSTRUCTIONS:
 
     context.writeln('=== NEW FOLLOW-UP QUESTION ===');
     context.writeln('USER: $currentQuestion');
-    context.writeln('');
-    context.writeln('Now provide a response that builds on the previous context without repeating what was already explained:');
+    context.writeln('Build on the previous context. Do not repeat what was already explained:');
 
     return context.toString();
   }
 
-  handleTextGeneration(String text, ChatMode mode) async {
+  handleTextGeneration(String text, ChatMode mode, {required String aiChatId, required String generationId}) async {
     final controller = Get.find<ChatController>();
     final cfg = getConfigDefaults();
-    var pref = await SharedPreferences.getInstance();
-    var userId = pref.getString('userId');
 
-    const systemInstruction =
-        "You are a helpful study assistant for college students. "
-        "Explain concepts clearly, simply, and stay focused on the question.";
+    // Use cached userId — avoids async SharedPreferences read on every call
+    final userId = ChatController.cachedUserId ?? '';
 
     final textModelName =
-    cfg.textValue?.model?.trim().isNotEmpty == true
-        ? cfg.textValue!.model!.trim()
-        : 'gemini-2.5-flash';
+        cfg.textValue?.model?.trim().isNotEmpty == true
+            ? cfg.textValue!.model!.trim()
+            : 'gemini-2.5-flash';
 
     print('[GEMINI] textGeneration mode=${mode.label} model=$textModelName isFollowUp=${controller.isFollowUp}');
 
-    final loadingIndex = controller.messages.length;
-
-    controller.messages.add(
-      FBChatItem.ai(
-        mode: mode.key,
-        text: 'Thinking about your question...',
-      ),
-    );
-    controller.scrollToBottom();
+    final loadingIndex = controller.messages.indexWhere((m) => m.id == aiChatId);
+    if (loadingIndex == -1) return;
+    
+    final conversationId = controller.currentConversationId.value;
+    if (conversationId == null) return;
 
     try {
-      // Build prompt with context for follow-ups
+      // Build prompt — system instruction is now at model level, so only send user content
       final String promptText;
       if (controller.isFollowUp) {
-        // For follow-up: include conversation history with special instructions
-        final followUpContext = _buildFollowUpContext(controller, text);
-        promptText = '''
-${cfg.textValue?.textPrompt ?? systemInstruction}
-
-$followUpContext
-''';
-        print('[GEMINI] Using follow-up context with ${controller.messages.length} previous messages');
+        promptText = _buildFollowUpContext(controller, text);
+        print('[GEMINI] Using follow-up context (${controller.messages.length} msgs)');
       } else {
-        // For new conversation: simple prompt
-        promptText = '''
-${cfg.textValue?.textPrompt ?? systemInstruction}
-
-User input:
-$text
-''';
+        promptText = text;
       }
 
-      final textModel =
-      FirebaseAI.googleAI().generativeModel(model: textModelName);
+      final textModel = _getModel(textModelName);
+      final response = await textModel.generateContent([Content.text(promptText)]);
 
-      final response =
-      await textModel.generateContent([Content.text(promptText)]);
+      // Check if generation was stopped by user or a NEW generation started
+      if (!controller.isGenerating.value || controller.currentGenerationId != generationId) {
+        print('[GEMINI] Generation stopped or stale, discarding result.');
+        return;
+      }
 
       final output = response.text?.trim();
 
       if (output == null || output.isEmpty) {
-        throw Exception("Empty Gemini output");
+        throw Exception('Empty Gemini output');
       }
 
-      /// ✅ UPDATE UI
-      if (loadingIndex < controller.messages.length) {
-        controller.messages[loadingIndex] = FBChatItem.ai(
-          mode: mode.key,
-          text: output,
-        );
-
-
-        print('Starting firebase - Conversation based saving');
-        
-        /// ✅ CREATE CHAT ITEM WITH BOTH USER INPUT AND AI OUTPUT
-        final chatItem = FBChatItem(
-          id: '', // Will be assigned by FirestoreService
-          createdAt: DateTime.now(),
-          mode: mode.key,
-          isUserMessage: false,
-          userInput: UserInput(prompt: text),
-          aiOutput: AIResponse(text: output),
-        );
-
-        final firestoreService = FirestoreService();
-
-        if (controller.isFollowUp) {
-          /// 🔄 ADD TO EXISTING CONVERSATION (Follow-up)
-          await firestoreService.addChatToConversation(
-            conversationId: controller.currentConversationId.value!,
-            chatItem: chatItem,
-          );
-          print('✅ Follow-up chat added to conversation');
-        } else {
-          /// 🆕 CREATE NEW CONVERSATION
-          final conversationId = await firestoreService.createConversation(
-            userId: userId ?? '',
+      // ✅ UPDATE UI (Only if still on this conversation)
+      if (controller.currentConversationId.value == conversationId) {
+        final localIndex = controller.messages.indexWhere((m) => m.id == aiChatId);
+        if (localIndex != -1) {
+          controller.messages[localIndex] = FBChatItem.ai(
             mode: mode.key,
-            chatItem: chatItem,
+            text: output,
           );
-          controller.currentConversationId.value = conversationId;
-          print('✅ New conversation created: $conversationId');
         }
       }
+
+      // ✅ CONSUME CREDIT ONLY AFTER SUCCESSFUL RESPONSE
+      try {
+        await Get.find<CreditController>().checkAndConsumeCredit();
+      } catch (_) {}
+
+      print('Updating firebase - Conversation based saving');
+
+      final firestoreService = FirestoreService();
+      await firestoreService.updateAiResponseInConversation(
+        conversationId: conversationId,
+        chatId: aiChatId,
+        outputText: output,
+      );
+      print('✅ AI response updated in Firestore');
     } catch (e, st) {
       print('[GEMINI ERROR] $e');
       print('[STACKTRACE] $st');
@@ -166,15 +141,11 @@ $text
       if (loadingIndex < controller.messages.length) {
         controller.messages[loadingIndex] = FBChatItem.ai(
           mode: mode.key,
-          text: "Something went wrong. Please try again.",
+          text: 'Something went wrong. Please try again.',
         );
       }
     }
 
     controller.scrollToBottom();
   }
-
-
-
 }
-

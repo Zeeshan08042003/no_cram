@@ -148,6 +148,42 @@ class FirestoreService {
     print('✅ Conversation latest_mode updated to: $latestMode');
   }
 
+  /// Update a specific chat item's AI response in a conversation
+  Future<void> updateAiResponseInConversation({
+    required String conversationId,
+    required String chatId,
+    required String outputText,
+    List<String>? imageUrls,
+  }) async {
+    final docRef = db.collection('conversations').doc(conversationId);
+    
+    // Using a transaction or read-modify-write for array update
+    return db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) return;
+
+      final data = snapshot.data()!;
+      final List<dynamic> chats = List.from(data['chats'] ?? []);
+      
+      final index = chats.indexWhere((c) => c['id'] == chatId);
+      if (index == -1) {
+        print('⚠️ Chat item not found in conversation for update: $chatId');
+        return;
+      }
+
+      final chatMap = Map<String, dynamic>.from(chats[index]);
+      chatMap['ai_output'] = {
+        'text': outputText,
+        'imageUrls': imageUrls,
+      };
+
+      chats[index] = chatMap;
+
+      transaction.update(docRef, {'chats': chats});
+      print('✅ AI response updated in Firestore for chat: $chatId');
+    });
+  }
+
 
   Future<void> registerAndStoreUser(
       String email,

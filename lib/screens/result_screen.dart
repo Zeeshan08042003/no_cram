@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/chat_mode.dart';
@@ -70,6 +71,10 @@ class _ResultScreenState extends State<ResultScreen> {
   
   /// GlobalKeys for each message to enable scrolling to specific messages
   final Map<int, GlobalKey> _messageKeys = {};
+  
+  // Blinking state for stop button
+  bool _stopButtonOpacity = true;
+  Timer? _blinkTimer;
 
   @override
   void initState() {
@@ -94,12 +99,11 @@ class _ResultScreenState extends State<ResultScreen> {
 
   @override
   void dispose() {
+    print("🚦 ResultScreen disposed");
     _searchController.dispose();
     _searchFocusNode.dispose();
-    // Defer clearMessage to avoid modifying observables while widget tree is locked
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      controller.clearMessage();
-    });
+    _blinkTimer?.cancel();
+    // Removed controller.clearMessage() to allow background generation to continue
     super.dispose();
   }
   
@@ -353,6 +357,67 @@ class _ResultScreenState extends State<ResultScreen> {
             );
           }),
 
+          // ================= IMAGE PREVIEWS =================
+          Obx(() {
+            final imageList = controller.selectedImageBytesList;
+            if (imageList.isEmpty) return const SizedBox.shrink();
+            
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: SizedBox(
+                height: 80,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: imageList.length,
+                  itemBuilder: (context, index) {
+                    final bytes = imageList[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Stack(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              var imageWidget = Image.memory(bytes, fit: BoxFit.cover);
+                              controller.showImageInDialog(imageWidget);
+                            },
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.memory(
+                                bytes,
+                                height: 80,
+                                width: 80,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 4,
+                            right: 4,
+                            child: GestureDetector(
+                              onTap: () => controller.removeImageAt(index),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  shape: BoxShape.circle,
+                                ),
+                                padding: const EdgeInsets.all(4),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          }),
+
           // ================= INPUT ROW =================
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -402,33 +467,47 @@ class _ResultScreenState extends State<ResultScreen> {
     return Obx(() {
       final isGenerating = controller.isGenerating.isTrue;
       final hasText = controller.textValue.value.trim().isNotEmpty;
-      final canSend = !isGenerating && hasText;
       
+      // Manage timer within Obx when generating
+      if (isGenerating && _blinkTimer == null) {
+        _blinkTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
+          if (mounted) setState(() => _stopButtonOpacity = !_stopButtonOpacity);
+        });
+      } else if (!isGenerating && _blinkTimer != null) {
+        _blinkTimer?.cancel();
+        _blinkTimer = null;
+      }
+
       return GestureDetector(
-        onTap: canSend ? () => controller.sendMessage() : null,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isGenerating
-                ? context.textTertiary
-                : (canSend ? AppColors.primaryBlue : AppColors.primaryBlue.withOpacity(0.4)),
-            shape: BoxShape.circle,
-          ),
-          child: isGenerating
-              ? const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.white,
-            ),
-          )
-              : Icon(Icons.send, 
-                  color: canSend ? Colors.white : Colors.white.withOpacity(0.6), 
-                  size: 20),
-        ),
+        onTap: () {
+          if (isGenerating) {
+            controller.stopGeneration();
+          } else if (hasText) {
+            controller.sendMessage();
+          }
+        },
+        child: isGenerating 
+          ? _buildButtonIcon(true, false)
+          : _buildButtonIcon(false, hasText),
       );
     });
+  }
+
+  Widget _buildButtonIcon(bool isGenerating, bool canSend) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isGenerating
+            ? Colors.red.withOpacity(0.8)
+            : (canSend ? AppColors.primaryBlue : AppColors.primaryBlue.withOpacity(0.4)),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        isGenerating ? Icons.stop_rounded : Icons.send,
+        color: Colors.white,
+        size: 20,
+      ),
+    );
   }
 
 
@@ -702,14 +781,29 @@ class _ResultScreenState extends State<ResultScreen> {
 
   Widget _buildStatusText(BuildContext context) {
     return Obx(
-      () => Text(
-        controller.isGenerating.isTrue ? "Generating..." : "Generated",
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: AppColors.success,
-        ),
-      ),
+      () {
+        String status = "Generated";
+        Color color = AppColors.success;
+        
+        if (controller.isGenerating.isTrue) {
+          status = "Generating...";
+        } else if (controller.messages.isNotEmpty) {
+          final last = controller.messages.last;
+          if (!last.isUserMessage && last.aiOutput?.text == "Stop Generating") {
+            status = "Stopped";
+            color = Colors.red;
+          }
+        }
+        
+        return Text(
+          status,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        );
+      },
     );
   }
 

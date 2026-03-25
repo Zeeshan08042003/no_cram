@@ -165,32 +165,15 @@ class HomeScreen extends StatelessWidget {
                                   onTap: () {
                                     // Show Coming Soon snackbar
                                     Get.snackbar(
-                                      '',
-                                      '',
+                                      '🎬 Coming Soon!',
+                                      'Video explanations are on the way. Stay tuned!',
                                       snackPosition: SnackPosition.BOTTOM,
                                       backgroundColor: AppColors.primaryBlue,
+                                      colorText: Colors.white,
                                       duration: const Duration(seconds: 2),
                                       margin: const EdgeInsets.all(16),
                                       borderRadius: 12,
                                       icon: const Icon(Icons.rocket_launch, color: Colors.white),
-
-                                      titleText: const Text(
-                                        '🎬 Coming Soon!',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-
-                                      messageText: const Text(
-                                        'Video explanations are on the way. Stay tuned!',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w400,
-                                          color: Colors.white,
-                                        ),
-                                      ),
                                     );
                                   },
                                   selectedColor: AppColors.primaryBlue,
@@ -416,14 +399,13 @@ class HomeScreen extends StatelessWidget {
                 final mode = controller.selectedMode.value;
                 final hasImages = controller.selectedImageBytesList.isNotEmpty;
                 
-                final isEnabled = mode != ChatMode.defaultMode &&
-                    text.isNotEmpty &&
+                final isEnabled = text.isNotEmpty &&
                     (mode != ChatMode.explainImage || hasImages);
                 
                 return ElevatedButton(
                   onPressed: () {
                     if (isEnabled) {
-                      controller.sendMessage();
+                      controller.sendMessage(forceNew: true);
                     } else {
                       _showRequirementDialog(context, mode, text.isEmpty, hasImages);
                     }

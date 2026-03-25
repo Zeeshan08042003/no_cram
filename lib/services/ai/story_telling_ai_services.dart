@@ -1,38 +1,44 @@
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../controllers/chat_controller.dart';
+import '../../controllers/credit_controller.dart';
 import '../../models/chat_mode.dart';
 import '../firebase/firebase_config.dart';
 import '../firebase/firestore_service.dart';
 
+class StoryTellingServices {
+  /// Cached model instance — created once per session
+  GenerativeModel? _cachedModel;
 
-
-class StoryTellingServices{
+  GenerativeModel _getModel(String modelName) {
+    _cachedModel ??= FirebaseAI.googleAI().generativeModel(
+      model: modelName,
+      systemInstruction: Content.system(
+        'You are a friendly storytelling teacher who explains school topics through short, imaginative stories.\n'
+        'Rules:\n'
+        '- Use only very simple, everyday words — as if explaining to a 6-year-old.\n'
+        '- Write a short story of 5–8 sentences featuring one or two fun characters (animals, kids, or objects that can talk).\n'
+        '- The story must teach exactly ONE concept through what the characters do and experience — not through narration.\n'
+        '- End with a single plain-English lesson sentence (e.g. "And that is why plants need sunlight!").\n'
+        '- Do NOT use technical terms. Do NOT write essays or explanations outside the story. Begin the story immediately on the first line.',
+      ),
+    );
+    return _cachedModel!;
+  }
 
   /// Build conversation context for follow-up questions
   String _buildFollowUpContext(ChatController controller, String currentQuestion) {
     final previousMessages = controller.messages;
-    
+
     if (previousMessages.isEmpty) {
       return currentQuestion;
     }
 
     final StringBuffer context = StringBuffer();
-    
-    context.writeln('''
-=== FOLLOW-UP STORY CONTEXT ===
-This is a follow-up question about a story you previously told.
-IMPORTANT INSTRUCTIONS:
-1. Continue the story or explanation - do not start a new story from scratch
-2. Do NOT repeat the story elements already told
-3. Expand on the existing story or add new chapters/elements
-4. Keep the same characters and setting if applicable
-5. Make the continuation feel natural and connected
-6. If asked about a new topic, creatively connect it to the previous story
 
-=== PREVIOUS STORY/CONVERSATION ===
-''');
+    context.writeln('=== FOLLOW-UP STORY CONTEXT ===');
+    context.writeln('This is a follow-up. Continue the story. Do NOT start a new story from scratch and do NOT repeat story elements already told.');
+    context.writeln('=== PREVIOUS STORY/CONVERSATION ===');
 
     for (int i = 0; i < previousMessages.length; i++) {
       final msg = previousMessages[i];
@@ -40,8 +46,8 @@ IMPORTANT INSTRUCTIONS:
         context.writeln('USER ASKED: ${msg.userInput.prompt}');
       } else {
         final aiText = msg.aiOutput?.text ?? '';
-        final truncatedText = aiText.length > 600 
-            ? '${aiText.substring(0, 600)}...[story continues...]' 
+        final truncatedText = aiText.length > 500
+            ? '${aiText.substring(0, 500)}...[story continues...]'
             : aiText;
         context.writeln('STORY: $truncatedText');
       }
@@ -50,72 +56,53 @@ IMPORTANT INSTRUCTIONS:
 
     context.writeln('=== NEW FOLLOW-UP REQUEST ===');
     context.writeln('USER NOW ASKS: $currentQuestion');
-    context.writeln('');
-    context.writeln('Continue the story or explanation building on what was already told:');
+    context.writeln('Continue the story building on what was already told:');
 
     return context.toString();
   }
 
-  handleStoryPrompt(String userInput) async {
-    var controller = Get.find<ChatController>();
-    var pref = await SharedPreferences.getInstance();
-    var userId = pref.getString('userId');
-
+  handleStoryPrompt(String userInput, {required String aiChatId, required String generationId}) async {
+    final controller = Get.find<ChatController>();
+    final userId = ChatController.cachedUserId ?? '';
 
     final cfg = getConfigDefaults();
-
-    final systemInstruction = cfg.storyValue?.storyPrompt ??
-        'You are a friendly storytelling teacher. '
-            'Explain any topic as if the student is 5 years old. '
-            'Use simple words and a short, fun, visual story that makes the concept easy to remember. '
-            'Do not use complex terms. Begin the story immediately.';
 
     final textModelName = cfg.storyValue?.model?.trim().isNotEmpty == true
         ? cfg.storyValue!.model!.trim()
         : 'gemini-2.5-flash';
 
-    print("📖 Story telling | selectedMode=${controller.selectedMode.value.label} isFollowUp=${controller.isFollowUp}");
-    print("📖 Story telling | model=$textModelName");
+    print('📖 Story telling | model=$textModelName isFollowUp=${controller.isFollowUp}');
 
-    final loadingIndex = controller.messages.length;
-    controller.messages.add(
-      FBChatItem.ai(
-        mode: ChatMode.storyTelling.key,
-        text: 'Crafting your story...',
-      ),
-    );
-    controller.scrollToBottom();
+    final loadingIndex = controller.messages.indexWhere((m) => m.id == aiChatId);
+    if (loadingIndex == -1) return;
+    
+    final conversationId = controller.currentConversationId.value;
+    if (conversationId == null) return;
 
     try {
-      // Build prompt with context for follow-ups
-      final String promptText;
+      // System instruction is at model level — just send user content
+      final String promptText = controller.isFollowUp
+          ? _buildFollowUpContext(controller, userInput)
+          : userInput;
+
       if (controller.isFollowUp) {
-        final followUpContext = _buildFollowUpContext(controller, userInput);
-        promptText = '''
-$systemInstruction
-
-$followUpContext
-''';
-        print('📖 Using follow-up context with ${controller.messages.length} previous messages');
-      } else {
-        promptText = '''
-$systemInstruction
-
-Student's topic:
-$userInput
-''';
+        print('📖 Using follow-up context (${controller.messages.length} msgs)');
       }
 
-      final storyModel =
-      FirebaseAI.googleAI().generativeModel(model: textModelName);
-      final prompt = [Content.text(promptText)];
-      final response = await storyModel.generateContent(prompt);
+      final storyModel = _getModel(textModelName);
+      final response = await storyModel.generateContent([Content.text(promptText)]);
+
+      // Check if generation was stopped by user or a NEW generation started
+      if (!controller.isGenerating.value || controller.currentGenerationId != generationId) {
+        print('[STORY] Generation stopped or stale, discarding result.');
+        return;
+      }
 
       final output = response.text;
 
       if (output == null || output.trim().isEmpty) {
-        print("🟡 Story: empty output from model");
-        if (loadingIndex < controller.messages.length) {
+        print('🟡 Story: empty output from model');
+        if (loadingIndex != -1 && loadingIndex < controller.messages.length) {
           controller.messages[loadingIndex] = FBChatItem.ai(
             mode: ChatMode.storyTelling.key,
             text: "Sorry, I couldn't create a story. Please try again.",
@@ -124,58 +111,39 @@ $userInput
         return;
       }
 
-
-      if (loadingIndex < controller.messages.length) {
-        /// ✅ CREATE CHAT ITEM WITH BOTH USER INPUT AND AI OUTPUT
-        final chatItem = FBChatItem(
-          id: '', // Will be assigned by FirestoreService
-          createdAt: DateTime.now(),
-          mode: ChatMode.storyTelling.key,
-          isUserMessage: false,
-          userInput: UserInput(prompt: userInput),
-          aiOutput: AIResponse(text: output),
-        );
-
-        final firestoreService = FirestoreService();
-
-        if (controller.isFollowUp) {
-          /// 🔄 ADD TO EXISTING CONVERSATION (Follow-up)
-          await firestoreService.addChatToConversation(
-            conversationId: controller.currentConversationId.value!,
-            chatItem: chatItem,
-          );
-          print('✅ Follow-up story added to conversation');
-        } else {
-          /// 🆕 CREATE NEW CONVERSATION
-          final conversationId = await firestoreService.createConversation(
-            userId: userId ?? '',
+      if (loadingIndex != -1 && controller.currentConversationId.value == conversationId) {
+        final localIndex = controller.messages.indexWhere((m) => m.id == aiChatId);
+        if (localIndex != -1) {
+          controller.messages[localIndex] = FBChatItem.ai(
             mode: ChatMode.storyTelling.key,
-            chatItem: chatItem,
+            text: output,
           );
-          controller.currentConversationId.value = conversationId;
-          print('✅ New story conversation created: $conversationId');
         }
-
-
-        controller.messages[loadingIndex] = FBChatItem.ai(
-          mode: ChatMode.storyTelling.key,
-          text: output,
-        );
       }
-    } catch (e, st) {
-      print("🔴 Story error: $e");
-      print("$st");
-      if (loadingIndex < controller.messages.length) {
 
+      // ✅ CONSUME CREDIT ONLY AFTER SUCCESSFUL RESPONSE
+      try {
+        await Get.find<CreditController>().checkAndConsumeCredit();
+      } catch (_) {}
+
+      final firestoreService = FirestoreService();
+      await firestoreService.updateAiResponseInConversation(
+        conversationId: conversationId,
+        chatId: aiChatId,
+        outputText: output,
+      );
+      print('✅ AI response updated in Firestore');
+    } catch (e, st) {
+      print('🔴 Story error: $e');
+      print('$st');
+      if (loadingIndex < controller.messages.length) {
         controller.messages[loadingIndex] = FBChatItem.ai(
           mode: ChatMode.storyTelling.key,
-          text: "Something went wrong while creating the story. Please try again.",
+          text: 'Something went wrong while creating the story. Please try again.',
         );
       }
     }
 
     controller.scrollToBottom();
   }
-
-
 }

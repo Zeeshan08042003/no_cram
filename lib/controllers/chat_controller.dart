@@ -4,12 +4,15 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_mode.dart';
 import '../screens/result_screen.dart';
 import '../services/ai/explain_image_ai_service.dart';
 import '../services/ai/image_ai_service.dart';
 import '../services/ai/story_telling_ai_services.dart';
 import '../services/ai/text_ai_service.dart';
+import '../services/firebase/firestore_service.dart';
+import 'package:uid/uid.dart';
 import 'credit_controller.dart';
 
 /// ---------------- ENUM & MESSAGE MODEL ----------------
@@ -104,8 +107,14 @@ class ChatController extends GetxController {
   var isGenerating = false.obs;
   var speechEnabled = false.obs;
   
+  /// Track current generation ID to prevent race conditions
+  String? currentGenerationId;
+  
   /// Cached CreditController for ultra-fast credit checks
   CreditController? _creditController;
+  
+  /// Cached userId — populated once at init so AI services skip SharedPreferences on every call
+  static String? cachedUserId;
 
   /// Check if we're in a follow-up chat (existing conversation)
   bool get isFollowUp => currentConversationId.value != null;
@@ -125,12 +134,16 @@ class ChatController extends GetxController {
     _initCreditController();
   }
   
-  void _initCreditController() {
+  void _initCreditController() async {
     try {
       _creditController = Get.find<CreditController>();
     } catch (e) {
       // Will be null if not found
     }
+    // Cache userId once — avoids SharedPreferences.getInstance() on every AI call
+    final prefs = await SharedPreferences.getInstance();
+    cachedUserId = prefs.getString('userId');
+    print('[CHAT] Cached userId: $cachedUserId');
   }
 
   /// Add image bytes to the selected list
@@ -185,36 +198,66 @@ class ChatController extends GetxController {
     }
   }
 
-  sendMessage() async {
+  void stopGeneration() {
+    if (isGenerating.isFalse) return;
+    
+    isGenerating.value = false;
+    print("🛑 Generation stopped by user");
+    
+    // Update the last message (which is the AI placeholder) to show it was stopped
+    if (messages.isNotEmpty) {
+      final lastIdx = messages.length - 1;
+      final lastMessage = messages[lastIdx];
+      
+      if (!lastMessage.isUserMessage) {
+        final stoppedOutput = AIResponse(text: "Stop Generating");
+        
+        // Update local UI
+        messages[lastIdx] = FBChatItem(
+          id: lastMessage.id,
+          createdAt: lastMessage.createdAt,
+          mode: lastMessage.mode,
+          userInput: lastMessage.userInput,
+          aiOutput: stoppedOutput,
+          isUserMessage: false,
+        );
+        
+        // Sync with Firestore so history also reflects the stopped state
+        if (currentConversationId.value != null) {
+          FirestoreService().updateAiResponseInConversation(
+            conversationId: currentConversationId.value!,
+            chatId: lastMessage.id,
+            outputText: stoppedOutput.text ?? "Stop Generating",
+          );
+        }
+      }
+    }
+  }
+
+  sendMessage({bool forceNew = false}) async {
     // Prevent double-tap / duplicate calls while already generating
     if (isGenerating.isTrue) {
       print("⚠️ sendMessage blocked - already generating");
       return;
     }
 
+    if (forceNew) {
+      currentConversationId.value = null;
+    }
+
+    final actionId = UId.getId();
+    currentGenerationId = actionId;
+
+    final bool initialIsFollowUp = isFollowUp;
     final text = textController.text.trim();
     final mode = selectedMode.value;
+    final hasImages = selectedImageBytesList.isNotEmpty;
 
     print("Mode is called ${mode.label}");
     print("📨 sendMessage | mode=${mode.key} | text='$text'");
 
-    // 🎯 REQUIRE MODE SELECTION BEFORE SEARCHING (only for initial search)
-    // User must select a learning style first, but follow-ups can use default (text) mode
-    if (mode == ChatMode.defaultMode && !isFollowUp) {
-      Get.snackbar(
-        '📚 Choose a Learning Style',
-        'Please select a mode (Illustration, Story, etc.) before searching',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.orange.shade600,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
-        margin: const EdgeInsets.all(16),
-        borderRadius: 12,
-        icon: const Icon(Icons.school, color: Colors.white),
-      );
-      print("❌ No mode selected - blocking search");
-      return;
-    }
+    // Note: Learning style is recommended but not enforced for initial search anymore
+    // to allow 'Teach Me' to work with default text mode.
 
     // 🔒 INSTANT CREDIT CHECK - Uses cached controller, no lookup overhead
     if (_creditController != null && !_creditController!.canSearch) {
@@ -226,66 +269,121 @@ class ChatController extends GetxController {
     isGenerating.value = true;
     
     // Set display mode (first message only)
-    if (!isFollowUp) displayMode.value = mode;
-    
-    // Consume credit in next microtask (after UI frame)
-    if (_creditController != null) {
-      scheduleMicrotask(() => _creditController!.checkAndConsumeCredit());
+    if (!initialIsFollowUp) {
+      messages.clear();
+      displayMode.value = mode;
     }
+
+    // 1️⃣ INITIAL FIRESTORE PERSISTENCE (USER MESSAGE + AI PLACEHOLDER)
+    final userId = cachedUserId ?? '';
+    final userChatId = UId.getId();
+    final aiChatId = UId.getId();
+
+    // Create user chat item
+    final userChatItem = FBChatItem(
+      id: userChatId,
+      createdAt: DateTime.now(),
+      mode: mode.key,
+      isUserMessage: true,
+      userInput: UserInput(
+        prompt: text,
+        imageBytesList: List<Uint8List>.from(selectedImageBytesList),
+      ),
+    );
+
+    // Create AI placeholder item
+    final aiPlaceholderItem = FBChatItem(
+      id: aiChatId,
+      createdAt: DateTime.now().add(const Duration(milliseconds: 10)),
+      mode: mode.key,
+      isUserMessage: false,
+      userInput: UserInput(prompt: text),
+      aiOutput: AIResponse(text: _getLoadingText(mode, hasImages)),
+    );
+
+    // Add to local UI immediately
+    messages.add(userChatItem);
+    messages.add(aiPlaceholderItem);
     
-    // 1️⃣ Explain Image flow
-    if (mode == ChatMode.explainImage) {
+    // Save to Firestore immediately
+    final firestoreService = FirestoreService();
+    if (initialIsFollowUp) {
+      // Add both to existing conversation
+      await firestoreService.addChatToConversation(
+        conversationId: currentConversationId.value!,
+        chatItem: userChatItem,
+      );
+      await firestoreService.addChatToConversation(
+        conversationId: currentConversationId.value!,
+        chatItem: aiPlaceholderItem,
+      );
+    } else {
+      // Create new conversation with user message
+      final convId = await firestoreService.createConversation(
+        userId: userId,
+        mode: mode.key,
+        chatItem: userChatItem,
+      );
+      currentConversationId.value = convId;
+      // Add AI placeholder to the new conversation
+      await firestoreService.addChatToConversation(
+        conversationId: convId,
+        chatItem: aiPlaceholderItem,
+      );
+    }
+
+    textController.clear();
+    
+    // Only clear images if they aren't about to be used for an explanation
+    final willExplain = mode == ChatMode.explainImage || (mode == ChatMode.defaultMode && hasImages);
+    if (!willExplain) {
+      clearImages();
+    }
+
+    scrollToBottom();
+
+    // 2️⃣ Explain Image flow (Explicit mode or default mode with images)
+    if (mode == ChatMode.explainImage || (mode == ChatMode.defaultMode && hasImages)) {
       // Navigate to result screen so user sees the result view
-      Get.to(() => ResultScreen.generation());
-      await explainImageServices.imageExplanation(text);
+      if (!initialIsFollowUp) Get.to(() => ResultScreen.generation());
+      await explainImageServices.imageExplanation(text, aiChatId: aiChatId, generationId: actionId);
       // Reset mode to default for follow-up questions
-      selectedMode.value = ChatMode.defaultMode;
+    selectedMode.value = ChatMode.illustration;
+    if (currentGenerationId == actionId) {
       isGenerating(false);
+    }
       return;
     }
 
     // 2️⃣ Normal flow
     if (text.isEmpty) {
+    if (currentGenerationId == actionId) {
       isGenerating(false);
+    }
       return;
     }
 
-    // Check if this is illustration mode with reference images
-    final hasReferenceImages = selectedImageBytesList.isNotEmpty;
-    final isIllustrationWithImages = mode == ChatMode.illustration && hasReferenceImages;
-
-    // Add user message to chat history (chat screen)
-    // Skip for illustration with images - the service will add it with image data
-    if (!isIllustrationWithImages) {
-      messages.add(
-        FBChatItem.user(
-          prompt: text,
-          mode: mode.key,
-        ),
-      );
-    }
-    textController.clear();
-    scrollToBottom();
-
     // Navigate to result screen for modes that produce a "result"
-    Get.to(() => ResultScreen.generation());
+    if (!initialIsFollowUp) Get.to(() => ResultScreen.generation());
 
     if (mode == ChatMode.illustration) {
-      print("✨ Illustration mode started${hasReferenceImages ? ' with reference images' : ''}");
-      await imageServices.handleIllustrationPrompt(text);
+      print("✨ Illustration mode started${hasImages ? ' with reference images' : ''}");
+      await imageServices.handleIllustrationPrompt(text, aiChatId: aiChatId, generationId: actionId);
     } else if (mode == ChatMode.storyTelling) {
       print("📖 Story telling mode started");
-      await storyTellingServices.handleStoryPrompt(text);
+      await storyTellingServices.handleStoryPrompt(text, aiChatId: aiChatId, generationId: actionId);
     } else {
       print("📝 Text mode started");
-      await textServices.handleTextGeneration(text, mode);
+      await textServices.handleTextGeneration(text, mode, aiChatId: aiChatId, generationId: actionId);
     }
     
     // Reset mode to default for follow-up questions
-    selectedMode.value = ChatMode.defaultMode;
+    selectedMode.value = ChatMode.illustration;
     print("🔄 Mode reset to default for follow-up questions");
     
-    isGenerating(false);
+    if (currentGenerationId == actionId) {
+      isGenerating(false);
+    }
     scrollToBottom();
   }
 
@@ -336,50 +434,37 @@ class ChatController extends GetxController {
   /// Sets the currentConversationId so follow-ups are added to this conversation
   /// If isLegacy is true, follow-ups will create a new conversation
   loadConversation(FBConversationModel? conversation, {bool isLegacy = false}) {
-    // 🔥 RESET STATE
-    messages.clear();
-    print("Loading conversation history (isLegacy: $isLegacy)");
-    
     if (conversation == null) {
       currentConversationId.value = null;
+      messages.clear();
       return;
     }
 
+    // If we are already viewing/generating THIS conversation, don't clear or reload
+    // This prevents losing in-progress AI responses when coming back from History
+    if (currentConversationId.value == conversation.id && messages.isNotEmpty) {
+      print("♻️ loadConversation: Conversation already active, skipping reload");
+      return;
+    }
+
+    // 🔥 RESET STATE for NEW conversation
+    messages.clear();
+    isGenerating.value = false;
+
+    print("Loading conversation history (isLegacy: $isLegacy)");
+
     // Set conversation ID for follow-ups (only for non-legacy)
-    // Legacy chats don't exist in 'conversations' collection, so we create new conversation for follow-ups
     currentConversationId.value = isLegacy ? null : conversation.id;
     
-    final modeString = conversation.latestMode;
-    final mode = setChatMode(modeString);
-    print("Conversation mode is $modeString");
+    // Assign stored chats
+    messages.assignAll(conversation.chats);
     
-    // 🔥 Keep mode as default for follow-up questions
-    // The header will show the original mode from displayMode
-    selectedMode.value = ChatMode.defaultMode;
-    displayMode.value = mode; // Show original mode in header
-
-    // Load all chats from the conversation
-    for (final chat in conversation.chats) {
-      // Add user message
-      messages.add(
-        FBChatItem.user(
-          prompt: chat.userInput.prompt,
-          mode: chat.mode,
-          imageUrl: chat.userInput.imageUrl,
-        ),
-      );
-
-      // Add AI response if exists
-      if (chat.aiOutput != null) {
-        messages.add(
-          FBChatItem.ai(
-            mode: chat.mode,
-            text: chat.aiOutput!.text ?? '',
-            imageUrls: chat.aiOutput!.imageUrls,
-          ),
-        );
-      }
-    }
+    // Show correct mode in header
+    final modeString = conversation.latestMode;
+    displayMode.value = setChatMode(modeString);
+    
+    // Keep follow-up mode as default text for now
+    selectedMode.value = ChatMode.illustration;
 
     print("Loaded ${conversation.chats.length} chats from conversation");
     scrollToBottom();
@@ -397,7 +482,7 @@ class ChatController extends GetxController {
     print("object of mode is $modeString");
     // 🔥 Keep mode as default for follow-up questions
     // The header will show the original mode from displayMode
-    selectedMode.value = ChatMode.defaultMode;
+    selectedMode.value = ChatMode.illustration;
     displayMode.value = mode; // Show original mode in header
 
     print(selectedMode);
@@ -447,6 +532,18 @@ class ChatController extends GetxController {
       return ChatMode.storyTelling;
     }else{
       return ChatMode.defaultMode;
+    }
+  }
+
+  String _getLoadingText(ChatMode mode, bool hasImages) {
+    if (mode == ChatMode.explainImage || (mode == ChatMode.defaultMode && hasImages)) {
+      return 'Analysing the image and explaining...';
+    } else if (mode == ChatMode.illustration) {
+      return 'Creating your illustration...';
+    } else if (mode == ChatMode.storyTelling) {
+      return 'Crafting your story...';
+    } else {
+      return 'Thinking about your question...';
     }
   }
 }

@@ -55,6 +55,7 @@ dependencies:
   firebase_auth: ^6.1.4
   google_sign_in: ^6.2.2
   url_launcher: ^6.2.6
+  flutter_image_compress: ^2.4.0
 
 dev_dependencies:
   flutter_test:

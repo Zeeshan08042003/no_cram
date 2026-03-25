@@ -442,16 +442,23 @@ class _MessageBubbleState extends State<MessageBubble>
       return ResponseMessageCard(
         label: 'Illustration',
         icon: Icons.image_outlined,
-        isImage: true,
-        content: Column(
-          children: [
-            SizedBox(
-              height: 200,
-              child: _shimmerPage(),
-            ),
-            SizedBox(height: 8),
-            _markdown(_visibleText)
-          ],
+        isIconVisible: false,
+        isImage:  widget.text == "Stop Generating" ? false : true,
+        content: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.text != "Stop Generating")
+                SizedBox(
+                  height: 200,
+                  child: _shimmerPage(),
+                ),
+              if (widget.text != "Stop Generating")
+                const SizedBox(height: 8),
+              _markdown(_visibleText)
+            ],
+          ),
         ),
       );
     }
@@ -663,7 +670,7 @@ Widget _shimmerPage() {
     baseColor: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
     highlightColor: isDark ? Colors.grey.shade600 : Colors.grey.shade100,
     child: Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 0),
       decoration: BoxDecoration(
         color: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
         borderRadius: BorderRadius.circular(8),
@@ -797,6 +804,7 @@ class ResponseMessageCard extends StatelessWidget {
   final double maxWidthFactor;
   final VoidCallback? onCopy;
   final bool? isImage;
+  final bool? isIconVisible;
   final VoidCallback? onDownload;
 
   const ResponseMessageCard({
@@ -810,6 +818,7 @@ class ResponseMessageCard extends StatelessWidget {
     this.onCopy,
     this.isImage,
     this.onDownload,
+    this.isIconVisible
   }) : super(key: key);
 
   bool _isImageWidget(Widget widget) {
@@ -887,41 +896,44 @@ class ResponseMessageCard extends StatelessWidget {
                       ),
 
                       // IMAGE → DOWNLOAD | TEXT → COPY
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: labelColor.withOpacity(isDark ? 0.25 : 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Stack(
-                          children: [
-                            Visibility(
-                              visible: isImage == true,
-                              child: GestureDetector(
-                                onTap: onDownload,
-                                child: Icon(
-                                  Icons.download_rounded,
-                                  size: 16,
-                                  color: labelColor,
+                      Visibility(
+                        visible: isIconVisible ?? true,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: labelColor.withOpacity(isDark ? 0.25 : 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Stack(
+                            children: [
+                              Visibility(
+                                visible: isImage == true,
+                                child: GestureDetector(
+                                  onTap: onDownload,
+                                  child: Icon(
+                                    Icons.download_rounded,
+                                    size: 16,
+                                    color: labelColor,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Visibility(
-                              visible: isImage == false,
-                              child: GestureDetector(
-                                onTap: onCopy,
-                                child: Icon(
-                                  Icons.copy,
-                                  size: 16,
-                                  color: labelColor,
+                              Visibility(
+                                visible: isImage == false,
+                                child: GestureDetector(
+                                  onTap: onCopy,
+                                  child: Icon(
+                                    Icons.copy,
+                                    size: 16,
+                                    color: labelColor,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
