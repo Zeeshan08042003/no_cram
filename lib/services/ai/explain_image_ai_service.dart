@@ -10,6 +10,7 @@ import '../../models/chat_mode.dart';
 import '../../utils/image_utils.dart';
 import '../firebase/firebase_config.dart';
 import '../firebase/firestore_service.dart';
+import 'ai_cancellation.dart';
 
 class ExplainImageAiService {
   /// Cached model instance — created once per session
@@ -125,9 +126,9 @@ class ExplainImageAiService {
         contentParts.add(InlineDataPart('image/jpeg', bytes));
       }
 
-      final response = await explainModel.generateContent([
-        Content.multi(contentParts)
-      ]);
+      final response = await controller.raceWithCancel(
+        explainModel.generateContent([Content.multi(contentParts)]),
+      );
 
       // Check if generation was stopped by user or a NEW generation started
       if (!controller.isGenerating.value || controller.currentGenerationId != generationId) {
@@ -176,6 +177,11 @@ class ExplainImageAiService {
       );
       print('✅ AI response updated in Firestore with imageUrls');
     } catch (e, st) {
+      // Silently exit if user pressed Stop
+      if (e is AICancelledException) {
+        print('[EXPLAIN IMAGE AI] Cancelled by user.');
+        return;
+      }
       print('Gemini error in Explain Image: $e');
       print(st);
 

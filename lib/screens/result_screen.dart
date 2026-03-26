@@ -264,7 +264,8 @@ class _ResultScreenState extends State<ResultScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () {
-        // Mode is already reset to default after generation completes in ChatController
+        // Restore the home screen's mode selection when navigating back
+        controller.selectedMode.value = controller.homeSelectedMode.value;
         return Future.value(true);
       },
       child: Scaffold(
@@ -302,61 +303,6 @@ class _ResultScreenState extends State<ResultScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ================= IMAGE PREVIEW =================
-          Obx(() {
-            final imageList = controller.selectedImageBytesList;
-            if (imageList.isEmpty) return const SizedBox.shrink();
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: SizedBox(
-                height: 80,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: imageList.length,
-                  itemBuilder: (context, index) {
-                    final bytes = imageList[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.memory(
-                              bytes,
-                              height: 80,
-                              width: 80,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: GestureDetector(
-                              onTap: () => controller.removeImageAt(index),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.6),
-                                  shape: BoxShape.circle,
-                                ),
-                                padding: const EdgeInsets.all(4),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 14,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            );
-          }),
-
           // ================= IMAGE PREVIEWS =================
           Obx(() {
             final imageList = controller.selectedImageBytesList;
@@ -643,7 +589,11 @@ class _ResultScreenState extends State<ResultScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         GestureDetector(
-          onTap: () => Get.back(),
+          onTap: () {
+            // Restore the home screen's mode selection when navigating back
+            controller.selectedMode.value = controller.homeSelectedMode.value;
+            Get.back();
+          },
           child: Icon(Icons.arrow_back_ios, color: context.textPrimary),
         ),
         Column(

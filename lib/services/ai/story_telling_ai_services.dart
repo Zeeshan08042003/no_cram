@@ -5,6 +5,7 @@ import '../../controllers/credit_controller.dart';
 import '../../models/chat_mode.dart';
 import '../firebase/firebase_config.dart';
 import '../firebase/firestore_service.dart';
+import 'ai_cancellation.dart';
 
 class StoryTellingServices {
   /// Cached model instance — created once per session
@@ -90,7 +91,9 @@ class StoryTellingServices {
       }
 
       final storyModel = _getModel(textModelName);
-      final response = await storyModel.generateContent([Content.text(promptText)]);
+      final response = await controller.raceWithCancel(
+        storyModel.generateContent([Content.text(promptText)]),
+      );
 
       // Check if generation was stopped by user or a NEW generation started
       if (!controller.isGenerating.value || controller.currentGenerationId != generationId) {
@@ -134,6 +137,11 @@ class StoryTellingServices {
       );
       print('✅ AI response updated in Firestore');
     } catch (e, st) {
+      // Silently exit if user pressed Stop
+      if (e is AICancelledException) {
+        print('[STORY AI] Cancelled by user.');
+        return;
+      }
       print('🔴 Story error: $e');
       print('$st');
       if (loadingIndex < controller.messages.length) {

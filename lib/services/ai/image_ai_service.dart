@@ -8,6 +8,7 @@ import '../../models/chat_mode.dart';
 import '../../utils/image_utils.dart';
 import '../firebase/firebase_config.dart';
 import '../firebase/firestore_service.dart';
+import 'ai_cancellation.dart';
 
 class ImageAIService {
   
@@ -78,9 +79,9 @@ class ImageAIService {
           'Focus on simple characters and a clear scene. Keep it under 100 words.]\n'
           'EXPLANATION: [2–3 simple, encouraging sentences for the student explaining what the illustration shows about "$userInput".]';
 
-      final analysisResponse = await analysisModel.generateContent([
-        Content.text(analysisPrompt)
-      ]);
+      final analysisResponse = await controller.raceWithCancel(
+        analysisModel.generateContent([Content.text(analysisPrompt)]),
+      );
 
       // Check if generation was stopped by user or a NEW generation started
       if (!controller.isGenerating.value || controller.currentGenerationId != generationId) {
@@ -96,7 +97,9 @@ class ImageAIService {
 
       /// 3️⃣ Generate image with enhanced prompt
       final imgModel = FirebaseAI.googleAI().imagenModel(model: imageModelName);
-      final response = await imgModel.generateImages(imagenPrompt);
+      final response = await controller.raceWithCancel(
+        imgModel.generateImages(imagenPrompt),
+      );
 
       // Check if generation was stopped by user or a NEW generation started
       if (!controller.isGenerating.value || controller.currentGenerationId != generationId) {
@@ -163,6 +166,11 @@ class ImageAIService {
         }
       }
     } catch (e, st) {
+      // Silently exit if user pressed Stop
+      if (e is AICancelledException) {
+        print('[IMAGE AI] Text-only illustration cancelled by user.');
+        return;
+      }
       print('🔴 Illustration error: $e');
       print(st);
 
@@ -226,9 +234,9 @@ class ImageAIService {
         analysisParts.add(InlineDataPart('image/jpeg', bytes));
       }
 
-      final analysisResponse = await analysisModel.generateContent([
-        Content.multi(analysisParts)
-      ]);
+      final analysisResponse = await controller.raceWithCancel(
+        analysisModel.generateContent([Content.multi(analysisParts)]),
+      );
 
       // Check if generation was stopped by user or a NEW generation started
       if (!controller.isGenerating.value || controller.currentGenerationId != generationId) {
@@ -247,7 +255,9 @@ class ImageAIService {
 
       /// 5️⃣ Generate illustration with Imagen
       final imgModel = FirebaseAI.googleAI().imagenModel(model: imageModelName);
-      final response = await imgModel.generateImages(imagenPrompt);
+      final response = await controller.raceWithCancel(
+        imgModel.generateImages(imagenPrompt),
+      );
 
       // Check if generation was stopped by user or a NEW generation started
       if (!controller.isGenerating.value || controller.currentGenerationId != generationId) {
@@ -321,6 +331,11 @@ class ImageAIService {
         }
       }
     } catch (e, st) {
+      // Silently exit if user pressed Stop
+      if (e is AICancelledException) {
+        print('[IMAGE AI] Reference-image illustration cancelled by user.');
+        return;
+      }
       print('🔴 Illustration with reference images error: $e');
       print(st);
 

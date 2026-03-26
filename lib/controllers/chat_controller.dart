@@ -14,6 +14,7 @@ import '../services/ai/text_ai_service.dart';
 import '../services/firebase/firestore_service.dart';
 import 'package:uid/uid.dart';
 import 'credit_controller.dart';
+import '../services/ai/ai_cancellation.dart';
 
 /// ---------------- ENUM & MESSAGE MODEL ----------------
 
@@ -88,6 +89,9 @@ class ChatController extends GetxController {
   final selectedMode = ChatMode.illustration.obs;
   /// Display mode for header - shows the original/first mode selected (doesn't change after generation)
   final displayMode = ChatMode.illustration.obs;
+  /// Preserves the mode selected on the home screen so we can restore it when
+  /// the user comes back from the result screen.
+  final homeSelectedMode = ChatMode.illustration.obs;
   var showAttachmentPanel = false.obs;
   /// Multiple images support - list of image bytes
   final RxList<Uint8List> selectedImageBytesList = <Uint8List>[].obs;
@@ -109,6 +113,10 @@ class ChatController extends GetxController {
   
   /// Track current generation ID to prevent race conditions
   String? currentGenerationId;
+
+  /// Completer used to cancel in-flight AI calls the moment Stop is pressed.
+  /// Completed with an error (_CancelledException) to race against generateContent futures.
+  Completer<Never>? _cancelCompleter;
   
   /// Cached CreditController for ultra-fast credit checks
   CreditController? _creditController;
@@ -200,7 +208,13 @@ class ChatController extends GetxController {
 
   void stopGeneration() {
     if (isGenerating.isFalse) return;
-    
+
+    // Fire the cancel completer FIRST so any racing raceWithCancel() calls
+    // immediately receive a _CancelledException and stop processing.
+    if (_cancelCompleter != null && !_cancelCompleter!.isCompleted) {
+      _cancelCompleter!.completeError(const AICancelledException());
+    }
+
     isGenerating.value = false;
     print("🛑 Generation stopped by user");
     
@@ -248,10 +262,18 @@ class ChatController extends GetxController {
     final actionId = UId.getId();
     currentGenerationId = actionId;
 
+    // Fresh cancellation gate for this generation
+    _cancelCompleter = Completer<Never>();
+
     final bool initialIsFollowUp = isFollowUp;
     final text = textController.text.trim();
-    final mode = selectedMode.value;
     final hasImages = selectedImageBytesList.isNotEmpty;
+
+    // For follow-ups on the result screen, always use text or explain-image mode —
+    // never illustration/story — regardless of what selectedMode is set to.
+    final mode = initialIsFollowUp
+        ? (hasImages ? ChatMode.explainImage : ChatMode.defaultMode)
+        : selectedMode.value;
 
     print("Mode is called ${mode.label}");
     print("📨 sendMessage | mode=${mode.key} | text='$text'");
@@ -272,6 +294,10 @@ class ChatController extends GetxController {
     if (!initialIsFollowUp) {
       messages.clear();
       displayMode.value = mode;
+      // Save the home screen's mode selection so it can be restored later,
+      // then switch to text mode so follow-ups on the result screen default to text.
+      homeSelectedMode.value = mode;
+      selectedMode.value = ChatMode.defaultMode;
     }
 
     // 1️⃣ INITIAL FIRESTORE PERSISTENCE (USER MESSAGE + AI PLACEHOLDER)
@@ -347,11 +373,9 @@ class ChatController extends GetxController {
       // Navigate to result screen so user sees the result view
       if (!initialIsFollowUp) Get.to(() => ResultScreen.generation());
       await explainImageServices.imageExplanation(text, aiChatId: aiChatId, generationId: actionId);
-      // Reset mode to default for follow-up questions
-    selectedMode.value = ChatMode.illustration;
-    if (currentGenerationId == actionId) {
-      isGenerating(false);
-    }
+      if (currentGenerationId == actionId) {
+        isGenerating(false);
+      }
       return;
     }
 
@@ -377,9 +401,7 @@ class ChatController extends GetxController {
       await textServices.handleTextGeneration(text, mode, aiChatId: aiChatId, generationId: actionId);
     }
     
-    // Reset mode to default for follow-up questions
-    selectedMode.value = ChatMode.illustration;
-    print("🔄 Mode reset to default for follow-up questions");
+    // selectedMode was already set to defaultMode before navigation; no reset needed here.
     
     if (currentGenerationId == actionId) {
       isGenerating(false);
@@ -397,6 +419,15 @@ class ChatController extends GetxController {
         );
       }
     });
+  }
+
+  /// Race [future] against the current cancellation gate.
+  /// If [stopGeneration] is called while [future] is pending, this throws
+  /// [_CancelledException] immediately so the AI service can exit silently.
+  Future<T> raceWithCancel<T>(Future<T> future) {
+    final cancel = _cancelCompleter;
+    if (cancel == null || cancel.isCompleted) return future;
+    return Future.any([future, cancel.future]);
   }
 
   showImageInDialog(Widget imageWidget) {
@@ -423,7 +454,8 @@ class ChatController extends GetxController {
 
   clearMessage() {
     messages.clear();
-    selectedMode.value = ChatMode.illustration;
+    // Restore the mode the user had selected on the home screen
+    selectedMode.value = homeSelectedMode.value;
     displayMode.value = ChatMode.illustration;
     clearImages();
     isGenerating(false); // Reset generating state
@@ -463,8 +495,8 @@ class ChatController extends GetxController {
     final modeString = conversation.latestMode;
     displayMode.value = setChatMode(modeString);
     
-    // Keep follow-up mode as default text for now
-    selectedMode.value = ChatMode.illustration;
+    // Use text mode for follow-ups from the result screen
+    selectedMode.value = ChatMode.defaultMode;
 
     print("Loaded ${conversation.chats.length} chats from conversation");
     scrollToBottom();
@@ -480,9 +512,9 @@ class ChatController extends GetxController {
     final modeString = chatModel?.mode ?? '';
     final mode = setChatMode(modeString);
     print("object of mode is $modeString");
-    // 🔥 Keep mode as default for follow-up questions
-    // The header will show the original mode from displayMode
-    selectedMode.value = ChatMode.illustration;
+    // 🔥 Use text mode for follow-up questions on the result screen
+    // The header shows the original mode via displayMode
+    selectedMode.value = ChatMode.defaultMode;
     displayMode.value = mode; // Show original mode in header
 
     print(selectedMode);
